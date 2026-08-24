@@ -26,7 +26,8 @@ add_executable(warproute src/main.cpp src/system_info.cpp)
 target_include_directories(warproute PRIVATE include)
 target_compile_options(warproute PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 
-add_executable(probe src/probe_main.cpp)
+add_executable(probe src/probe_main.cpp src/timer.cpp)
+target_include_directories(probe PRIVATE include)
 target_compile_options(probe PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 
 if(CUDAToolkit_FOUND)
