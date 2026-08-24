@@ -22,7 +22,8 @@ endif()
 # GPU support is optional and off on machines without CUDA.
 find_package(CUDAToolkit QUIET)
 
-add_executable(warproute src/main.cpp)
+add_executable(warproute src/main.cpp src/system_info.cpp)
+target_include_directories(warproute PRIVATE include)
 target_compile_options(warproute PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 
 add_executable(probe src/probe_main.cpp)
