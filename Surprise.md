@@ -1,0 +1,1 @@
+Three entries: the sloping L2 plateau with your TLB hypothesis and a note to test on day 5; DRAM at 158 ns vs an expected 90-100; and the cycle-count question (6.2 measured vs ~4 published, unresolvable without a cycle counter, ratios used instead).

@@ -1,24 +1,26 @@
+#include "probe.hpp"
 #include "timer.hpp"
 #include <iostream>
-#include <vector>
 
 int main() {
   warproute::set_high_qos();
+  for(size_t i=4 ; i<=65536; i*=2){
+      const size_t buffer_bytes = i * 1024;
+      const size_t n_slots = buffer_bytes / sizeof(size_t);
+      const size_t hops = 1000000;
 
-  const size_t N = 1000000;
-  std::vector<double> data(N);
-  for (size_t i = 0; i < N; i++) data[i] = i * 0.5;
+      auto chain = warproute::build_chain(n_slots);
 
-  volatile double sink = 0.0;
+      volatile size_t sink = 0;
+      warproute::Stats s = warproute::run_n([&]() {
+        sink = warproute::chase(chain, hops);
+      });
 
-  warproute::Stats s = warproute::run_n([&]() {
-    double sum = 0.0;
-    for (size_t i = 0; i < N; i++) sum += data[i];
-    sink = sum;
-  });
-
-  std::cout << "median " << s.median_ns << " ns\n";
-  std::cout << "min    " << s.min_ns << " ns\n";
-  std::cout << "iqr    " << s.iqr_ns << " ns\n";
+      std::cout << buffer_bytes / 1024 << " KB   "
+                << s.median_ns / hops << " ns/hop   "
+                << "(iqr " << s.iqr_ns / hops << ")\n";
+     
+  }
   return 0;
-}
+  
+  }
