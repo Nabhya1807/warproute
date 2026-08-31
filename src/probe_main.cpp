@@ -1,26 +1,37 @@
 #include "probe.hpp"
 #include "timer.hpp"
+#include "workload.hpp"
+#include "saxpy_cpu.hpp"
 #include <iostream>
 
 int main() {
   warproute::set_high_qos();
-  for(size_t i=4 ; i<=65536; i*=2){
-      const size_t buffer_bytes = i * 1024;
-      const size_t n_slots = buffer_bytes / sizeof(size_t);
-      const size_t hops = 1000000;
 
-      auto chain = warproute::build_chain(n_slots);
+  warproute::ulayout w = warproute::make_saxpy();
+  warproute::slayout cfg;   // defaults: 1 thread
 
-      volatile size_t sink = 0;
-      warproute::Stats s = warproute::run_n([&]() {
-        sink = warproute::chase(chain, hops);
-      });
+  for (size_t n = 1024; n <= (64ull * 1024 * 1024); n *= 2) {
+    w.setup(n);
+    w.run(cfg);
+    bool ok = w.verify();
+    if (!ok) {
+      std::cout << n << "  FAILED VERIFY\n";
+      continue;
+    }
 
-      std::cout << buffer_bytes / 1024 << " KB   "
-                << s.median_ns / hops << " ns/hop   "
-                << "(iqr " << s.iqr_ns / hops << ")\n";
-     
+    w.setup(n);  // reset before timing
+    warproute::Stats s = warproute::run_n([&]() {
+      w.run(cfg);
+    });
+
+    double bytes = static_cast<double>(n) * 3 * sizeof(float);
+    double gbps = bytes / (s.median_ns / 1e9) / 1e9;
+
+    std::cout << n << " elems   "
+              << bytes / 1024 << " KB   "
+              << s.median_ns << " ns   "
+              << gbps << " GB/s\n";
   }
+
   return 0;
-  
-  }
+}
