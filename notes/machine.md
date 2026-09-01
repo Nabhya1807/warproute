@@ -72,3 +72,67 @@ Comparison to day-2 pointer chase (random access):
 - Interpretation: sequential streaming gets DRAM row-buffer hits and
   hardware prefetching that random access cannot get. Same hardware,
   same boundaries, very different curve shape depending on access pattern.
+
+## Day 4 results — L1d associativity (conflict-miss sweep)
+
+Method: K addresses spaced exactly one full L1d capacity apart (131072 bytes
+= 16384 size_t slots), so all K share the same set index but differ in tag.
+Linked into one shuffled cycle, chased 1M hops. Sweep K upward; latency stays
+at L1-hit level while K <= ways, spikes once K exceeds ways.
+
+Stride derived from measured hw.perflevel0.l1dcachesize, not hardcoded.
+
+K     ns/hop     iqr
+1     0.382      0.0001    <- DEGENERATE, see surprises.md
+2     1.548      0.059
+3     1.544      0.042
+4     1.546      0.115
+5     1.556      0.037
+6     1.550      0.018
+7     1.535      0.011
+8     1.542      0.031     <- last value at L1-hit latency
+9     3.527      1.098     <- JUMP, 2.3x
+10    4.529      0.442
+11    4.942      0.318
+12    5.184      0.135
+13    6.035      0.680
+14    6.613      0.982
+15    6.927      0.118
+16    7.204      0.390
+17    6.975      0.543
+18    6.969      0.120
+19    7.114      0.353
+20    7.030      0.053
+21    8.239      0.390
+22    9.775      0.063
+23    10.356     0.305
+24    11.034     0.351
+25    10.935     0.661
+26    10.528     0.831
+27    10.236     1.256
+28    10.946     0.595
+29    11.006     0.251
+30    11.130     0.304
+31    10.928     0.211
+32    11.244     0.241
+
+RESULT: L1d is 8-WAY SET-ASSOCIATIVE.
+  K=2..8 flat at 1.535-1.556 ns (spread of 0.02 ns across seven values)
+  K=9 jumps to 3.53 ns -- boundary is unambiguous
+  Not direct-mapped: K=2 would have spiked immediately if 1-way.
+
+Full L1d structure, now completely determined by measurement:
+  capacity     128 KB      (day 2)
+  block size   128 bytes   (sysctl; day-3 stride sweep still to confirm)
+  total blocks 128 KB / 128 B = 1024
+  ways         8           (day 4)
+  sets         1024 / 8 = 128
+  check: 128 sets x 8 ways x 128 B = 131072 B = 128 KB  OK
+
+Note: this measures L1d only. L1i associativity is not probeable with a
+data-access pointer chase and is out of scope for this project.
+
+Cross-check against day 2: the K=16-20 plateau sits at ~7.0 ns, close to the
+day-2 measured L2 hit latency of ~6.1 ns. Consistent -- once L1 is fully
+thrashing, every access is an L1 miss served by L2, so latency converges on
+L2 hit time. Two independent experiments agreeing.
