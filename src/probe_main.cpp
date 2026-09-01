@@ -1,36 +1,38 @@
 #include "probe.hpp"
 #include "timer.hpp"
-#include "workload.hpp"
-#include "saxpy_cpu.hpp"
+#include "system_info.hpp"
 #include <iostream>
 
 int main() {
   warproute::set_high_qos();
 
-  warproute::ulayout w = warproute::make_saxpy();
-  warproute::slayout cfg;   // defaults: 1 thread
+  warproute::SystemInfo info = warproute::query();
+  size_t l1_bytes = info.p_cores.l1d_cache_size;
 
-  for (size_t n = 1024; n <= (64ull * 1024 * 1024); n *= 2) {
-    w.setup(n);
-    w.run(cfg);
-    bool ok = w.verify();
-    if (!ok) {
-      std::cout << n << "  FAILED VERIFY\n";
-      continue;
-    }
+  if (l1_bytes == 0) {
+    std::cout << "Could not determine L1d size on this machine. "
+                 "Associativity probe cannot run.\n";
+    return 1;
+  }
 
-    w.setup(n);  // reset before timing
+  size_t set_stride = l1_bytes / sizeof(size_t);
+  const size_t hops = 1000000;
+
+  std::cout << "L1d = " << l1_bytes / 1024 << " KB\n"
+            << "stride = " << set_stride << " slots ("
+            << l1_bytes << " bytes)\n\n";
+
+  for (size_t K = 1; K <= 32; K++) {
+    auto chain = warproute::build_colliding_chain(K, set_stride);
+
+    volatile size_t sink = 0;
     warproute::Stats s = warproute::run_n([&]() {
-      w.run(cfg);
+      sink = warproute::chase(chain, hops);
     });
 
-    double bytes = static_cast<double>(n) * 3 * sizeof(float);
-    double gbps = bytes / (s.median_ns / 1e9) / 1e9;
-
-    std::cout << n << " elems   "
-              << bytes / 1024 << " KB   "
-              << s.median_ns << " ns   "
-              << gbps << " GB/s\n";
+    std::cout << "K=" << K << "\t"
+              << s.median_ns / hops << " ns/hop\t"
+              << "(iqr " << s.iqr_ns / hops << ")\n";
   }
 
   return 0;
