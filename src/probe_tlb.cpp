@@ -48,7 +48,7 @@ static void free_page_chain(void** chain) {
 
 void probe_tlb_reach(std::size_t page_size, std::size_t cache_line_size) {
   std::printf("pages,bytes,ns_per_hop\n");
-  const std::size_t sizes[] = {96, 112, 128, 144, 160, 192, 224, 256,
+  const std::size_t sizes[] = {96, 112, 128, 132, 136, 142,  144, 160, 192, 224, 256,
                              320, 384, 448, 512, 768, 1024};
 
   for (std::size_t pages : sizes) {
