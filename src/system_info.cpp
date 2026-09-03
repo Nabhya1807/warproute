@@ -122,6 +122,13 @@ SystemInfo query() {
     info.cache_line_size = cache_line;
   }
 
+  // Page size drives the TLB probe's stride, so it is read rather than
+  // hardcoded. Apple Silicon reports 16384; Intel Macs report 4096.
+  std::uint64_t page_sz = 0;
+  if (sysctl_u64("hw.pagesize", page_sz)) {
+    info.page_size = page_sz;
+  }
+
   // Apple Silicon: perflevel0 is the P-core cluster, perflevel1 is E-core.
   // On single-cluster Macs (e.g. Intel) perflevel1 simply won't resolve and
   // e_cores is left at its default (physical_cores == 0).
@@ -133,6 +140,11 @@ SystemInfo query() {
   const long cores = sysconf(_SC_NPROCESSORS_ONLN);
   if (cores > 0) {
     info.p_cores.physical_cores = static_cast<int>(cores);
+  }
+
+  const long page_sz = sysconf(_SC_PAGESIZE);
+  if (page_sz > 0) {
+    info.page_size = static_cast<std::size_t>(page_sz);
   }
 
 #if defined(_SC_LEVEL1_DCACHE_SIZE)
@@ -157,6 +169,11 @@ SystemInfo query() {
   // default (not reported) here.
 #endif
 
+  // Last resort if neither platform path resolved it.
+  if (info.page_size == 0) {
+    info.page_size = 4096;
+  }
+
 #if defined(WARPROUTE_HAVE_CUDA)
   info.gpu = query_gpu();
 #endif
@@ -168,6 +185,7 @@ std::string format(const SystemInfo& info) {
   std::ostringstream out;
   out << "CPU: " << (info.cpu_brand.empty() ? "unknown" : info.cpu_brand) << '\n';
   out << "Cache line: " << info.cache_line_size << " bytes\n";
+  out << "Page size: " << info.page_size << " bytes\n";
 
   auto print_cluster = [&out](const char* label, const CoreClusterInfo& cluster) {
     out << label << ": ";

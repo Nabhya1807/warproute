@@ -23,6 +23,7 @@ struct GpuInfo {
 struct SystemInfo {
   std::string cpu_brand;
   std::size_t cache_line_size = 0;
+  std::size_t page_size = 0;        
   CoreClusterInfo p_cores;
   CoreClusterInfo e_cores;
   GpuInfo gpu;
