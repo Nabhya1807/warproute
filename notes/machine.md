@@ -136,3 +136,52 @@ Cross-check against day 2: the K=16-20 plateau sits at ~7.0 ns, close to the
 day-2 measured L2 hit latency of ~6.1 ns. Consistent -- once L1 is fully
 thrashing, every access is an L1 miss served by L2, so latency converges on
 L2 hit time. Two independent experiments agreeing.
+## Day 5 results — TLB reach (page-strided pointer chase)
+
+Method: one pointer slot per page, slots linked into a single shuffled
+cycle so every hop lands on a distinct page and consumes a distinct TLB
+entry. Slot offset within each page advances by one cache line per page
+((n * line_size) % page_size) so slots spread across L1 sets rather than
+colliding in one -- without this the sweep measures associativity, not
+TLB reach.
+
+Page size read from hw.pagesize (16384 B), not hardcoded.
+200,000 hops per measurement, median of 10 runs after 3 warmups.
+
+Fine sweep, run 3 (cleanest of three; runs 1-2 noisier in the tail):
+
+pages   bytes      ns/hop
+96      1.5 MB     1.122
+112     1.8 MB     1.010
+128     2.0 MB     1.010
+144     2.4 MB     1.047
+160     2.6 MB     1.104   <- last value at L1-dTLB-hit latency
+192     3.1 MB     2.800   <- JUMP, 2.5x
+224     3.7 MB     2.644
+256     4.2 MB     2.861
+320     5.2 MB     2.775
+384     6.3 MB     2.831
+448     7.3 MB     2.763
+512     8.4 MB     2.749
+768     12.6 MB    2.811   <- second plateau ends here
+1024    16.8 MB    4.362   <- second climb begins
+
+Coarse sweep tail (4-8192 pages): 2048 -> 6.749, 4096 -> 15.335,
+8192 -> 17.631.
+
+RESULT: two-level TLB.
+  L1 dTLB  ~160 entries, 2.5 MB reach, ~1.03 ns
+  L2 TLB   covers to ~768 pages (12 MB), ~2.8 ns
+  full page walk beyond that, climbing to 17.6 ns at 8192 pages
+
+Knee at 160/192 reproduced across all three runs. Second plateau
+(192-768) held 2.64-2.86 ns across a 4x range of page counts in run 3 --
+flat enough to be a real second structure, not a transition.
+
+Neither TLB level is published for Apple Silicon.
+
+Cross-check against day 2: L1 region (4 KB - 128 KB) spans at most 8
+pages, so TLB pressure cannot exist there. That is why the L1 plateau is
+genuinely flat while the L2 plateau is not -- TLB reach (2.5 MB) sits
+INSIDE the L2 range (16 MB), so the last 6x of the L2 sweep pays
+translation cost on top of data cost.

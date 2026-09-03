@@ -33,3 +33,39 @@ depending on replacement policy and access order some accesses still hit.
 The miss fraction grows with K rather than flipping to 100% instantly.
 Not a problem for the measurement -- the K=8 to K=9 boundary is still sharp
 and unambiguous -- but worth noting that the degradation is smooth.
+## L2 plateau climbs 3x instead of staying flat  [PARTIAL, day 5]
+
+Day 5 measured L1 dTLB reach = 2.5 MB (160 entries x 16 KB). Explains the
+steep part: 2 MB -> 16 MB latency doubles (9.31 -> 19.76 ns), and both
+measured TLB knees (2.5 MB, ~12 MB) fall in that range.
+
+Does not explain the early part. At 512 KB latency is already +31% over
+the 256 KB baseline, but 512 KB is only 32 pages -- well inside a
+160-entry TLB. Something else contributes from 256 KB to 2 MB.
+Candidates: L2 shared across the P-core cluster, or L2 latency varying
+with footprint. Untested.
+
+## -O3 deleted the entire TLB chase loop  [RESOLVED, day 5]
+
+First sweep reported 0.38-0.74 ns/hop -- faster than the measured 1.53 ns
+L1 hit, so physically impossible. The chase result went to a file-scope
+`static volatile void*` nothing ever read; the compiler proved the store
+dead and removed the loop feeding it. objdump showed the timed region as
+a bare decrement/compare with zero memory instructions. volatile alone
+was not enough.
+
+Fix: asm volatile("" : "+r"(p)) per iteration. Emits nothing, only blocks
+the optimizer.
+
+src/probe.cpp (day 2) verified clean by disassembly -- separate
+translation unit, no LTO, dependency is structural.
+
+Lesson: a benchmark measuring nothing reports an impossibly good number.
+
+## TLB sweep tail not reproducible past 512 pages  [OPEN]
+
+Three runs agree exactly on the knee (flat to 160, jump at 192) but
+disagree past 512:  1024 pages = 2.72 / 5.17 / 4.36 ns.
+
+Likely background load; run 3 was quietest and tightest. TODO: print IQR
+in probe_tlb.cpp, rerun on an idle machine.
