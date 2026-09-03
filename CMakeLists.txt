@@ -22,11 +22,21 @@ endif()
 # GPU support is optional and off on machines without CUDA.
 find_package(CUDAToolkit QUIET)
 
-add_executable(warproute src/main.cpp src/system_info.cpp)
+add_executable(warproute
+  src/main.cpp
+  src/system_info.cpp
+  src/timer.cpp
+  src/probe_tlb.cpp)
 target_include_directories(warproute PRIVATE include)
 target_compile_options(warproute PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 
-add_executable(probe src/probe_main.cpp src/timer.cpp src/probe.cpp src/system_info.cpp kernels/saxpy_cpu.cpp)
+add_executable(probe
+  src/probe_main.cpp
+  src/timer.cpp
+  src/probe.cpp
+  src/system_info.cpp
+  kernels/saxpy_cpu.cpp
+  src/probe_tlb.cpp)
 target_include_directories(probe PRIVATE include)
 target_compile_options(probe PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 
