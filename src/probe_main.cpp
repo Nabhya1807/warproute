@@ -3,6 +3,7 @@
 #include "system_info.hpp"
 #include "workload.hpp"
 #include "saxpy_cpu.hpp"
+#include "sgemm_cpu.hpp"
 #include <cstring>
 #include <iostream>
 
@@ -94,11 +95,23 @@ static int run_saxpy() {
   return 0;
 }
 
+// Day 6: SGEMM correctness + naive baseline.
+static int run_sgemm_verify() {
+  return warproute::sgemm_verify() ? 0 : 1;
+}
+
+static int run_sgemm_bench() {
+  warproute::sgemm_bench_naive();
+  return 0;
+}
+
 static void usage(const char* prog) {
   std::cout << "usage: " << prog << " <sweep>\n\n"
-            << "  capacity   cache capacity sweep (day 2)\n"
-            << "  assoc      L1d associativity sweep (day 4)\n"
-            << "  saxpy      single-threaded SAXPY bandwidth sweep (day 3)\n";
+            << "  capacity       cache capacity sweep (day 2)\n"
+            << "  assoc          L1d associativity sweep (day 4)\n"
+            << "  saxpy          single-threaded SAXPY bandwidth sweep (day 3)\n"
+            << "  sgemm-verify   SGEMM correctness checks (day 6)\n"
+            << "  sgemm-bench    naive SGEMM GFLOP/s baseline (day 6)\n";
 }
 
 int main(int argc, char** argv) {
@@ -109,9 +122,11 @@ int main(int argc, char** argv) {
 
   warproute::set_high_qos();
 
-  if (std::strcmp(argv[1], "capacity") == 0) return run_capacity();
-  if (std::strcmp(argv[1], "assoc") == 0)    return run_assoc();
-  if (std::strcmp(argv[1], "saxpy") == 0)    return run_saxpy();
+  if (std::strcmp(argv[1], "capacity") == 0)     return run_capacity();
+  if (std::strcmp(argv[1], "assoc") == 0)        return run_assoc();
+  if (std::strcmp(argv[1], "saxpy") == 0)        return run_saxpy();
+  if (std::strcmp(argv[1], "sgemm-verify") == 0) return run_sgemm_verify();
+  if (std::strcmp(argv[1], "sgemm-bench") == 0)  return run_sgemm_bench();
 
   std::cout << "unknown sweep: " << argv[1] << "\n\n";
   usage(argv[0]);

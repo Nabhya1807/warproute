@@ -36,6 +36,7 @@ add_executable(probe
   src/probe.cpp
   src/system_info.cpp
   kernels/saxpy_cpu.cpp
+  kernels/sgemm_cpu.cpp
   src/probe_tlb.cpp)
 target_include_directories(probe PRIVATE include)
 target_compile_options(probe PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
