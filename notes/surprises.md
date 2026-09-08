@@ -101,7 +101,7 @@ buffer size.
 Large sizes matched because they are DRAM-bandwidth-bound rather than
 clock-bound — that tail was already at its ceiling.
 
-Verified by rebuilding the unmodified day-3 source (d32b24e) and running both
+Verified by rebuilding the unmodified day-3 source (4ede387) and running both
 binaries cold and warm:
 
 ```
