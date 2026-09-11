@@ -388,3 +388,59 @@ rather than absolute cycle counts throughout, which is why day 2 concludes with
 
 Day 8 is planned to add hardware performance counters. A real cycle counter
 would settle this directly, and it is worth re-checking then.
+
+---
+
+## Accelerate sgemm measures 1120 GFLOP/s, 35x the NEON ceiling   [OPEN]
+
+Added Accelerate's `cblas_sgemm` as a reference ceiling for the SGEMM work. At
+n=1024, single-threaded, it measures **1120 GFLOP/s** against the ~32 GFLOP/s
+single-core NEON FMA figure estimated in the Day 6 notes — 35x the estimate.
+
+That tripped the rule written down in the `-O3` and K=1 entries above: any
+number better than a known physical ceiling is a methodology bug until proven
+otherwise. Two prior entries in this file were exactly that failure.
+
+**It survived the check.** Verified outside the timing harness entirely: 400
+`cblas_sgemm` calls timed with `steady_clock`, with a checksum read of C
+afterwards so no part of the work could be dead-coded. That independent path
+agreed at 1100 GFLOP/s. The harness is not producing this number by accident,
+and the multiply is genuinely happening.
+
+**`VECLIB_MAXIMUM_THREADS=1` had no effect.** Both configurations measure the
+same, and CPU time against wall time over the 400 calls was 1:1 — one core's
+worth of CPU for the whole run, where six P-cores would have shown roughly 6x.
+The work is genuinely single-threaded. So this is not 1120 GFLOP/s of parallel
+throughput being mislabelled; it is one thread.
+
+**Hypothesis, not proven: Accelerate is dispatching to Apple's AMX matrix
+coprocessor.** AMX is undocumented, is attached per-cluster rather than
+per-core, and has no public instruction interface — Accelerate is the only
+supported way to reach it. That would explain both facts at once: the magnitude,
+because AMX is a dedicated matrix unit rather than the NEON pipeline, and the
+irrelevance of the thread cap, because a per-cluster block can be saturated by a
+single thread. Nothing here demonstrates it. The evidence is consistent with
+AMX and also consistent with any other explanation that puts a wide matrix unit
+behind one thread; no counter was read, and the instruction stream was not
+inspected. Day 8's performance counters may or may not help, since an
+undocumented coprocessor may not be visible to them.
+
+**Consequence for the project: Accelerate is not a like-for-like ceiling for my
+kernels.** The naive and blocked kernels are scalar C++ on the general-purpose
+pipeline — no NEON intrinsics, no matrix unit. Comparing them to Accelerate
+measures the gap between a scalar loop and a dedicated coprocessor, which is not
+the quantity the blocking work is trying to move. Three separate ceilings, kept
+distinct from here on:
+
+```
+scalar, general-purpose pipeline   ~4 GFLOP/s      MEASURED (best blocked kernel)
+NEON FMA, single core              ~32 GFLOP/s     ESTIMATED, still unmeasured
+AMX via Accelerate                 ~1120 GFLOP/s   MEASURED
+```
+
+The middle row is the one the current kernels are actually working against, and
+it is the only one of the three that has never been measured. Measuring it —
+a hand-vectorised NEON SGEMM — is the honest next comparison, and until that
+exists the scalar-to-Accelerate ratio should not be quoted as a speedup target.
+
+Open: whether the mechanism is AMX, and what the real NEON ceiling is.
