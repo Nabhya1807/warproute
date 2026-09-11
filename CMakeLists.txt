@@ -40,6 +40,8 @@ add_executable(probe
   src/probe_tlb.cpp)
 target_include_directories(probe PRIVATE include)
 target_compile_options(probe PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
+# Apple Accelerate supplies the cblas_sgemm reference ceiling (day 7).
+target_link_libraries(probe PRIVATE "-framework Accelerate")
 
 if(CUDAToolkit_FOUND)
   target_compile_definitions(warproute PRIVATE WARPROUTE_HAVE_CUDA)

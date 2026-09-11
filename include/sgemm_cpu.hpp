@@ -20,5 +20,7 @@ bool sgemm_verify_blocked();
 void sgemm_sweep_tiles();
 bool sgemm_verify_blocked_padded();
 void sgemm_sweep_tiles_padded();
+bool sgemm_verify_blas();
+void sgemm_bench_blas();
 
 }  // namespace warproute

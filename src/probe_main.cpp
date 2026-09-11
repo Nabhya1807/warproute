@@ -122,6 +122,15 @@ static int run_sgemm_sweep_padded() {
   return 0;
 }
 
+static int run_sgemm_verify_blas() {
+  return warproute::sgemm_verify_blas() ? 0 : 1;
+}
+
+static int run_sgemm_bench_blas() {
+  warproute::sgemm_bench_blas();
+  return 0;
+}
+
 static void usage(const char* prog) {
   std::cout << "usage: " << prog << " <sweep>\n\n"
             << "  capacity       cache capacity sweep (day 2)\n"
@@ -132,7 +141,11 @@ static void usage(const char* prog) {
             << "  sgemm-verify-blocked  blocked SGEMM vs naive (day 7)\n"
             << "  sgemm-sweep           tile size sweep (day 7)\n"
             << "  sgemm-verify-padded   padded-stride blocked SGEMM vs naive (day 7)\n"
-            << "  sgemm-sweep-padded    tile size sweep, row stride n+16 (day 7)\n";
+            << "  sgemm-sweep-padded    tile size sweep, row stride n+16 (day 7)\n"
+            << "  sgemm-verify-blas     Accelerate cblas_sgemm vs naive (day 7)\n"
+            << "  sgemm-bench-blas      Accelerate cblas_sgemm ceiling (day 7)\n"
+            << "                        set VECLIB_MAXIMUM_THREADS=1 for the\n"
+            << "                        single-threaded configuration\n";
 }
 
 int main(int argc, char** argv) {
@@ -152,6 +165,8 @@ int main(int argc, char** argv) {
   if (std::strcmp(argv[1], "sgemm-sweep") == 0)          return run_sgemm_sweep();
   if (std::strcmp(argv[1], "sgemm-verify-padded") == 0)  return run_sgemm_verify_blocked_padded();
   if (std::strcmp(argv[1], "sgemm-sweep-padded") == 0)   return run_sgemm_sweep_padded();
+  if (std::strcmp(argv[1], "sgemm-verify-blas") == 0)    return run_sgemm_verify_blas();
+  if (std::strcmp(argv[1], "sgemm-bench-blas") == 0)     return run_sgemm_bench_blas();
 
   std::cout << "unknown sweep: " << argv[1] << "\n\n";
   usage(argv[0]);

@@ -1,0 +1,5 @@
+config,n,gflops,iqr_pct
+single_threaded,512,1192.495,0.4
+single_threaded,1024,1118.408,1.0
+default,512,1192.495,0.6
+default,1024,1113.407,1.1

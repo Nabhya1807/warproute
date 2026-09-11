@@ -3,9 +3,14 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <random>
 #include <vector>
 #include <algorithm>
+#include <string>
+
+#define ACCELERATE_NEW_LAPACK 1
+#include <Accelerate/Accelerate.h>
 
 namespace warproute {
 
@@ -279,6 +284,73 @@ void sgemm_sweep_tiles_padded() {
       std::printf("%zu,%zu,%.3f,%.1f\n", n, tile, gflops, iqr_pct);
       std::fflush(stdout);
     }
+  }
+}
+
+
+// Day 7: Apple Accelerate cblas_sgemm as a measured performance ceiling.
+// Row-major, no transpose, alpha=1, beta=0, all leading dimensions n, so this
+// computes exactly the same C = A * B as sgemm_naive.
+static void sgemm_blas(const float* A, const float* B, float* C,
+                       std::size_t n) {
+  const int in = (int)n;
+  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+              in, in, in, 1.0f, A, in, B, in, 0.0f, C, in);
+}
+
+// Accelerate reads VECLIB_MAXIMUM_THREADS at library init, so a single process
+// can only exercise one configuration. Label whichever one this process is in.
+// The second config is labelled "default" and not "multithreaded" on purpose:
+// at n=512 and n=1024 Accelerate runs sgemm on one thread either way (user CPU
+// time tracks wall time 1:1 in both), so calling it multithreaded would be a
+// false label. It is the uncapped configuration, not a parallel one.
+static const char* blas_config() {
+  const char* v = std::getenv("VECLIB_MAXIMUM_THREADS");
+  return (v && std::string(v) == "1") ? "single_threaded" : "default";
+}
+
+bool sgemm_verify_blas() {
+  bool ok = true;
+
+  for (std::size_t n : {64u, 128u, 256u}) {
+    std::mt19937 rng(12345);
+    std::vector<float> A(n * n), B(n * n), C_ref(n * n, 0.0f), C_test(n * n, 0.0f);
+    fill_random(A, rng);
+    fill_random(B, rng);
+    sgemm_naive(A.data(), B.data(), C_ref.data(), n);
+    sgemm_blas(A.data(), B.data(), C_test.data(), n);
+
+    float max_err = 0.0f;
+    for (std::size_t i = 0; i < n * n; i++) {
+      max_err = std::max(max_err, std::fabs(C_test[i] - C_ref[i]));
+    }
+    std::printf("n=%zu max error %g%s\n", n, (double)max_err,
+                max_err > 1e-3f ? "   FAIL" : "");
+    if (max_err > 1e-3f) ok = false;
+  }
+
+  std::printf(ok ? "sgemm_verify_blas: PASS\n" : "sgemm_verify_blas: FAIL\n");
+  return ok;
+}
+
+void sgemm_bench_blas() {
+  std::printf("config,n,gflops,iqr_pct\n");
+
+  for (std::size_t n : {512u, 1024u}) {
+    std::mt19937 rng(12345);
+    std::vector<float> A(n * n), B(n * n), C(n * n, 0.0f);
+    fill_random(A, rng);
+    fill_random(B, rng);
+
+    Stats s = run_n([&]() {
+      sgemm_blas(A.data(), B.data(), C.data(), n);
+    });
+
+    const double flops = 2.0 * (double)n * n * n;
+    const double gflops = flops / s.median_ns;
+    const double iqr_pct = 100.0 * s.iqr_ns / s.median_ns;
+    std::printf("%s,%zu,%.3f,%.1f\n", blas_config(), n, gflops, iqr_pct);
+    std::fflush(stdout);
   }
 }
 
