@@ -163,7 +163,44 @@ unambiguous — but the degradation is smooth, not a step.
 
 ---
 
-## Optimal SGEMM tile is T=8-16, not the predicted T=64-104   [PARTIAL]
+## Naive SGEMM declines smoothly with n, with no cache cliff   [RESOLVED]
+
+*(Merged from the stray root-level `surprises.md`, Day 6.)*
+
+Measured, single P-core, -O3, median of 10:
+
+```
+n      GFLOP/s
+128    2.259
+256    1.915
+512    1.639
+1024   1.484
+```
+
+Expected a plateau followed by a cliff once the working set left L1d. Got a
+smooth ~12-15% decline per doubling instead.
+
+Explanation: the B access is `B[k*n + j]`, stride `4n` bytes. At n=128 that is
+already 512 bytes — four times the 128-byte line. So every k step touches a
+fresh line at **every** size tested. The kernel has no spatial locality on B to
+lose, so there is no cliff when it "stops fitting".
+
+What changes with n is which level serves the miss, not whether one occurs. At
+n=128, B is 64 KB and fits in the 128 KB L1d, so repeat passes hit L1. At
+n=1024, B is 4 MB with a 12 MB working set, pressing on the 16 MB L2, so more
+misses reach DRAM. Day 2 ratios L1:L2:DRAM = 1:4.0:103 — the blend shifts
+gradually, hence the smooth slope.
+
+Peak is ~7% of estimated single-core NEON FMA throughput (~32 GFLOP/s). This is
+the motivation for the Day 7 blocking work.
+
+(The n=1024 figure here is 1.484, from `results/sgemm_naive.csv`; the Day 7
+entries below quote 1.486 as the naive baseline, from a later rerun. Rerun
+variance of 0.1%, not a discrepancy worth chasing.)
+
+---
+
+## Optimal SGEMM tile is T=8-16, not the predicted T=64-104   [RESOLVED]
 
 Day-2 prediction, written before any SGEMM existed and committed in machine.md:
 three float tiles of T x T must live in L1d at once, so `3 * T^2 * 4 <= 131072`
@@ -216,15 +253,138 @@ Caveats, held open deliberately:
 - Two matrix sizes, both powers of two, is a two-point fit. The 2x claim is
   consistent with 2x, not measured against a third stride.
 
-Falsifying experiment (Day 7 task 2, running): allocate the matrices with a row
-stride of `n + 16` floats instead of `n`, keeping them logically n x n. That
-leaves tile area, loop structure and flop count identical and changes only the
-spacing between rows, so a power-of-two stride is no longer in play. If conflict
-misses are the cause, the large-T collapse should lift and the curve should
-flatten or move its peak upward. If the padded curve looks like the unpadded
-one, the hypothesis is wrong and something else — loop overhead or the C store
-pattern — is doing the work.
+**CONFIRMED by the padding experiment.** The matrices were reallocated with a
+row stride of `n + 16` floats instead of `n`, staying logically n x n. Tile
+area, loop structure, flop count and tile size are all unchanged; the only
+difference is that rows are no longer spaced at a power of two. Padded kernel
+verified against `sgemm_naive` within 1e-3 before timing. Data in
+`results/2026-09-10/sgemm_tile_sweep_padded.csv`.
 
-Status PARTIAL until that runs. What is established is the refutation: the
-capacity prediction is measured wrong. The conflict-miss story is the leading
-explanation, not a demonstrated one.
+```
+        T=8     T=16    T=32    T=48    T=64    T=96    T=128   T=256
+n=1024  3.876   3.949   3.992   3.386   3.158   2.552   2.307   1.785
+n=512   3.923   4.124   4.005   3.416   3.150   2.582   2.308   1.782
+```
+
+Three things fall out, all in the direction the set-group model predicts.
+
+**1. Padding alone roughly doubles throughput at the collapsed point.** At
+n=1024, T=64: 1.579 -> 3.158 GFLOP/s, +100%. Same arithmetic, same tile size,
+same instruction count — only the spacing between rows changed. This is the
+comparison that isolates stride from everything else, because tile height is
+held fixed across it.
+
+**2. The benefit is strongly asymmetric between the two matrix sizes, and
+asymmetric the right way.** The model says n=1024 has 4 set groups against
+n=512's 8, so n=1024 carries about twice the conflict pressure and has about
+twice as much to gain. Measured at T=64:
+
+```
+n=1024   1.579 -> 3.158   (+100%)
+n=512    2.819 -> 3.150   (+12%)
+```
+
+After padding the two sizes converge to 3.158 and 3.150 — a 0.3% spread, where
+before they differed by 79%. If conflict misses were the only thing separating
+the two strides, removing conflicts should collapse the difference. It does.
+This is what promotes the entry from "consistent with" to confirmed: a capacity
+explanation predicts no asymmetry here at all, because both sizes share one
+128 KiB L1d and the tiles are identical.
+
+**3. With conflicts removed the optimum moves up, toward where the capacity
+model pointed.** Unpadded peak was T=8/16 at 3.92; padded peak is **T=32 at
+3.992 GFLOP/s**, 2.69x the 1.486 naive baseline. So the Day 2 reasoning was
+sound but **incomplete rather than wrong** — capacity is a real constraint and
+does set the optimum once conflicts are out of the way, but on a power-of-two
+stride conflict misses bind first and bind much harder, dragging the optimum
+down to T=8-16. The prediction failed because it modelled only the weaker of
+the two constraints.
+
+Measurement quality: padded IQR is under 0.8% on every point, and the sweep was
+run twice with the two runs agreeing within 0.3%.
+
+The caveats above still stand as written. The first one — that small tiles
+change loop overhead and prefetch along with locality — is *narrowed* but not
+eliminated by point 1, since that comparison holds T fixed at 64 and therefore
+cannot be explained by inner-loop length. The second still holds: this is two
+power-of-two strides plus one padded stride, not a stride sweep.
+
+What remains unexplained is the padded curve's own decline above T=32 — logged
+as a separate OPEN entry below.
+
+
+---
+
+## Padded SGEMM still declines above T=32 while the tiles still fit   [OPEN]
+
+With the power-of-two row stride removed (see the entry above), the padded tile
+sweep peaks at T=32 and then falls monotonically, and capacity does not account
+for where the fall starts.
+
+Three float tiles of T x T occupy `3 * T^2 * 4` bytes. Against the 128 KiB L1d
+measured on day 2:
+
+```
+T      working set    n=1024 padded GFLOP/s
+32     12 KiB         3.992   <- peak
+48     27 KiB         3.386   -15%
+64     48 KiB         3.158   -21%
+96     108 KiB        2.552   -36%
+128    192 KiB        2.307        (exceeds L1d)
+256    768 KiB        1.785        (exceeds L1d)
+```
+
+The decline is already 15% at T=48, where the working set is roughly 27 KiB —
+about a fifth of L1d, fitting comfortably. It reaches 36% at T=96, still inside
+128 KiB. Capacity does eventually become a real constraint at T=128 and T=256,
+which genuinely overflow L1d, but the curve has lost more than a third of its
+throughput before reaching that point. n=512 behaves identically (3.416 / 3.150
+/ 2.582 at T=48/64/96), so this is not specific to one matrix size.
+
+IQR is under 0.8% on every point and the sweep reproduced within 0.3% across two
+runs, so the decline is real and not measurement noise.
+
+No hypothesis recorded yet — deliberately. The remaining candidates are not
+separable from throughput numbers alone, and guessing here is what produced the
+Day 2 error in the first place. Day 8 is planned to add hardware performance
+counters, which should distinguish L1 data-cache misses from dTLB misses from
+other effects and say directly which one tracks this curve.
+
+
+---
+
+## DRAM latency 158 ns against an expected 90-100 ns   [OPEN]
+
+*(Merged from the stray root-level `Surprise.md`, Day 2. Recorded there as a
+one-line stub; kept here so it is not lost, at the level of detail the stub
+carried.)*
+
+The day-2 capacity sweep bottoms out at 158.128 ns/hop at 64 MB, where the
+expectation going in was 90-100 ns. The 32 MB and 64 MB rows also carry the
+largest IQRs in the sweep (46.4 and 15.6), so part of the gap may be
+measurement quality rather than the machine.
+
+Not investigated further. The ratio that the day-2 conclusions actually rest on
+(L1:L2:DRAM = 1:4.0:103) is frequency- and methodology-independent and lands
+inside the published 1:3-4:50-100 range, so nothing downstream depends on the
+absolute number being right.
+
+---
+
+## L1 hit latency is ~6.2 cycles against a published ~4   [OPEN]
+
+*(Merged from the stray root-level `Surprise.md`, Day 2.)*
+
+The measured 1.53 ns L1 hit latency works out to roughly 6.2 cycles at the
+nominal P-core clock, where published figures for Apple L1d load-to-use are
+around 4.
+
+Recorded at the time as unresolvable with the tools then available: the probe
+measures wall-clock nanoseconds, and converting to cycles requires assuming a
+clock that DVFS is actively changing (see the SAXPY entry above for what that
+assumption costs). The workaround adopted was to report cache-level *ratios*
+rather than absolute cycle counts throughout, which is why day 2 concludes with
+1:4.0:103 rather than a cycles-per-access table.
+
+Day 8 is planned to add hardware performance counters. A real cycle counter
+would settle this directly, and it is worth re-checking then.

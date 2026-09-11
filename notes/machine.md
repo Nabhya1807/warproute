@@ -161,7 +161,22 @@ from the power-of-two row stride rather than tile capacity — a T x T tile is T
 rows spaced n*4 bytes apart, not a contiguous block. Data in
 `results/2026-09-10/sgemm_tile_sweep.csv`; full writeup and the open questions
 in surprises.md, "Optimal SGEMM tile is T=8-16, not the predicted T=64-104"
-(PARTIAL).
+(RESOLVED).
+
+**Traced and confirmed.** Reallocating the matrices with a row stride of n+16
+floats — same tile size, same arithmetic, only the row spacing changed — lifts
+n=1024 T=64 from 1.579 to 3.158 GFLOP/s (+100%), while n=512 T=64 gains only
+12% (2.819 -> 3.150), the asymmetry the 4-vs-8 set-group model predicts. The two
+sizes converge to within 0.3% once padded. Conflict misses from the power-of-two
+row stride, not tile capacity, were the binding constraint.
+
+**Measured optimum: T=32 with padding, 3.992 GFLOP/s at n=1024 — 2.69x the
+1.486 naive baseline.** Unpadded, the best available is 3.922 at T=8/16 (2.64x).
+The Day 2 capacity reasoning was incomplete rather than wrong: it names a real
+constraint, and the optimum does move up toward it once conflicts are removed,
+but on a power-of-two stride conflict misses bind first and far harder. Padded
+data in `results/2026-09-10/sgemm_tile_sweep_padded.csv`. The padded curve's
+own decline above T=32 is a separate open question — see surprises.md.
 
 ## Colab T4 (GPU runs)
 Fill in after first Colab session: SM count, compute capability, CUDA version.
