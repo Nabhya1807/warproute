@@ -160,3 +160,71 @@ rather than flipping to 100% instantly.
 
 Not a problem for the measurement — the K=8/K=9 boundary is still sharp and
 unambiguous — but the degradation is smooth, not a step.
+
+---
+
+## Optimal SGEMM tile is T=8-16, not the predicted T=64-104   [PARTIAL]
+
+Day-2 prediction, written before any SGEMM existed and committed in machine.md:
+three float tiles of T x T must live in L1d at once, so `3 * T^2 * 4 <= 131072`
+gives T <= 104, and the nearest useful power of two is **64x64**. The whole
+argument is capacity — how much fits.
+
+The Day-7 sweep refutes it. Full data in
+`results/2026-09-10/sgemm_tile_sweep.csv`. Peak is at the *smallest* tiles
+measured, and throughput falls monotonically above T=32:
+
+```
+        T=8     T=16    T=32    T=48    T=64    T=96    T=128   T=256
+n=1024  3.922   3.919   2.445   1.757   1.579   1.449   1.430   1.428
+n=512   3.705   3.942   3.938   3.417   2.819   2.366   2.106   1.754
+```
+
+The predicted optimum, T=64 at n=1024, runs at 1.579 GFLOP/s — 2.5x *slower*
+than T=8, and only 6% above the 1.486 naive baseline. Best measured is 3.922 at
+T=8, a 2.64x speedup over naive. IQR is under 1% on nearly every point (the one
+exception is n=512 T=8 at 13.6%), so this is not noise: the prediction is wrong
+in direction, not just in magnitude.
+
+**Hypothesis: the binding constraint is conflict misses, not capacity.** The
+capacity argument silently assumes a T x T tile is a contiguous block of
+`T^2 * 4` bytes. It is not. In a row-major n x n matrix a tile is T *rows*,
+each `T * 4` bytes long, spaced `n * 4` bytes apart. What the cache sees is the
+stride, not the tile area.
+
+At n=1024 the row stride is 4096 B = 32 cache lines of 128 B. With the 128 sets
+measured on day 4, the set index advances 32 per row and wraps every 4 rows, so
+an entire tile — however tall — lands in only **4 distinct set groups**. A
+64-row tile puts 16 rows into each group against the 8 ways measured on day 4.
+That is 2x over-subscribed, which is the same thrashing condition as the Day 4
+K=9 result, and it should evict tile rows before they are reused. At T=16 it is
+4 rows per set group, inside 8 ways, and it fits.
+
+**Supporting evidence: the n=512 column behaves as the stride argument predicts
+and the capacity argument does not.** At n=512 the row stride is 2048 B = 16
+lines, so the set index wraps every 8 rows instead of 4 — twice as many set
+groups, and therefore roughly twice the tolerable tile height. That is what the
+data shows: n=512 still holds ~3.9 GFLOP/s at T=32, where n=1024 has already
+collapsed to 2.445, and n=512's own collapse is deferred to T=48-64. Under a
+capacity explanation the two sizes share one L1d and should turn over at the
+same T. They do not. The turnover tracks the row stride.
+
+Caveats, held open deliberately:
+- Small tiles also shorten the innermost `k` run, so T=8-16 changes loop
+  overhead, prefetch behaviour and the store pattern on C all at once. Nothing
+  here separates the conflict effect from those.
+- Two matrix sizes, both powers of two, is a two-point fit. The 2x claim is
+  consistent with 2x, not measured against a third stride.
+
+Falsifying experiment (Day 7 task 2, running): allocate the matrices with a row
+stride of `n + 16` floats instead of `n`, keeping them logically n x n. That
+leaves tile area, loop structure and flop count identical and changes only the
+spacing between rows, so a power-of-two stride is no longer in play. If conflict
+misses are the cause, the large-T collapse should lift and the curve should
+flatten or move its peak upward. If the padded curve looks like the unpadded
+one, the hypothesis is wrong and something else — loop overhead or the C store
+pattern — is doing the work.
+
+Status PARTIAL until that runs. What is established is the refutation: the
+capacity prediction is measured wrong. The conflict-miss story is the leading
+explanation, not a demonstrated one.

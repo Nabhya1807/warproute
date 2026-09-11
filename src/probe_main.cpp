@@ -104,6 +104,23 @@ static int run_sgemm_bench() {
   warproute::sgemm_bench_naive();
   return 0;
 }
+static int run_sgemm_verify_blocked() {
+  return warproute::sgemm_verify_blocked() ? 0 : 1;
+}
+
+static int run_sgemm_sweep() {
+  warproute::sgemm_sweep_tiles();
+  return 0;
+}
+
+static int run_sgemm_verify_blocked_padded() {
+  return warproute::sgemm_verify_blocked_padded() ? 0 : 1;
+}
+
+static int run_sgemm_sweep_padded() {
+  warproute::sgemm_sweep_tiles_padded();
+  return 0;
+}
 
 static void usage(const char* prog) {
   std::cout << "usage: " << prog << " <sweep>\n\n"
@@ -111,7 +128,11 @@ static void usage(const char* prog) {
             << "  assoc          L1d associativity sweep (day 4)\n"
             << "  saxpy          single-threaded SAXPY bandwidth sweep (day 3)\n"
             << "  sgemm-verify   SGEMM correctness checks (day 6)\n"
-            << "  sgemm-bench    naive SGEMM GFLOP/s baseline (day 6)\n";
+            << "  sgemm-bench    naive SGEMM GFLOP/s baseline (day 6)\n"
+            << "  sgemm-verify-blocked  blocked SGEMM vs naive (day 7)\n"
+            << "  sgemm-sweep           tile size sweep (day 7)\n"
+            << "  sgemm-verify-padded   padded-stride blocked SGEMM vs naive (day 7)\n"
+            << "  sgemm-sweep-padded    tile size sweep, row stride n+16 (day 7)\n";
 }
 
 int main(int argc, char** argv) {
@@ -127,6 +148,10 @@ int main(int argc, char** argv) {
   if (std::strcmp(argv[1], "saxpy") == 0)        return run_saxpy();
   if (std::strcmp(argv[1], "sgemm-verify") == 0) return run_sgemm_verify();
   if (std::strcmp(argv[1], "sgemm-bench") == 0)  return run_sgemm_bench();
+  if (std::strcmp(argv[1], "sgemm-verify-blocked") == 0) return run_sgemm_verify_blocked();
+  if (std::strcmp(argv[1], "sgemm-sweep") == 0)          return run_sgemm_sweep();
+  if (std::strcmp(argv[1], "sgemm-verify-padded") == 0)  return run_sgemm_verify_blocked_padded();
+  if (std::strcmp(argv[1], "sgemm-sweep-padded") == 0)   return run_sgemm_sweep_padded();
 
   std::cout << "unknown sweep: " << argv[1] << "\n\n";
   usage(argv[0]);

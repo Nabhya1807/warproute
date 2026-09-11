@@ -153,5 +153,15 @@ of data cost.
 32x32 = 12 KiB total (fits) · 64x64 = 48 KiB (fits) · 128x128 = 192 KiB (spills
 128 KiB L1). Predicted best tile: **64x64**. Written day 2, before measurement.
 
+**TESTED DAY 7 — REFUTED.** The prediction above stands as written; it is
+wrong. The measured tile sweep peaks at T=8-16 and falls monotonically above
+T=32. At n=1024 the predicted T=64 gives 1.579 GFLOP/s against 3.922 at T=8,
+and is only 6% above the naive baseline. Leading explanation is conflict misses
+from the power-of-two row stride rather than tile capacity — a T x T tile is T
+rows spaced n*4 bytes apart, not a contiguous block. Data in
+`results/2026-09-10/sgemm_tile_sweep.csv`; full writeup and the open questions
+in surprises.md, "Optimal SGEMM tile is T=8-16, not the predicted T=64-104"
+(PARTIAL).
+
 ## Colab T4 (GPU runs)
 Fill in after first Colab session: SM count, compute capability, CUDA version.
