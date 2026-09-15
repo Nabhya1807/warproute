@@ -36,6 +36,19 @@ bool counters_init();
 // prints a "FAIL ..." line and returns zeros with events sized to the list.
 CounterReading counters_read();
 
+// Runs a small fixed workload (one cache line on each of a few thousand fresh
+// pages, written then read) on the calling thread and diffs counters_read()
+// around it. Returns false, printing every event's delta as "FAIL ..." lines,
+// if counters_init() has not succeeded or any listed event counted exactly 0:
+// that workload always generates instructions, cache and TLB activity, so an
+// exact zero means the counter is not live. Prints one "ok" line on success.
+bool counters_self_test();
+
+// Reads kpc.force_all_ctrs back from the kernel. Returns true if counters are
+// still forced; otherwise prints a "FAIL ..." line and returns false. Call
+// before counters_shutdown(), which clears the force flag itself.
+bool counters_still_forced();
+
 // Disables counting and releases the kpep config/database. No-op if
 // counters_init() never succeeded. Idempotent.
 void counters_shutdown();

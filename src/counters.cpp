@@ -29,11 +29,21 @@
 //     and tests bit 0 of the byte at 0x30 to take the fixed-counter path,
 //     kpep_config_kpc loads the event number with `ldrh [ev, #0x2c]`.
 //   Like the rest of this file, this can break on any OS update.
+//
+//   kpc_get_config / kpc_get_config_count signatures were checked against
+//   `dyld_info -disassemble` of kperf on Darwin 24.6.0: get_config issues
+//   sysctl kpc.config_count(classes) and then kpc.config with an output buffer
+//   of count * 8 bytes and NO caller-supplied size, so the caller must size the
+//   buffer from kpc_get_config_count first. kpep_config_kpc_count returns the
+//   number of configurable counters on the PMU (not the number of events
+//   added); kpep_config_kpc writes 0 for every counter no event was placed on.
 // =============================================================================
 
 #include "counters.hpp"
 
 #include <dlfcn.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include <cerrno>
 #include <cstddef>
@@ -77,6 +87,8 @@ static_assert(offsetof(kpep_event, flags) == 0x30, "kpep_event layout");
 int (*kpc_force_all_ctrs_get)(int* val);
 int (*kpc_force_all_ctrs_set)(int val);
 int (*kpc_set_config)(std::uint32_t classes, std::uint64_t* config);
+int (*kpc_get_config)(std::uint32_t classes, std::uint64_t* config);
+std::uint32_t (*kpc_get_config_count)(std::uint32_t classes);
 int (*kpc_set_counting)(std::uint32_t classes);
 int (*kpc_set_thread_counting)(std::uint32_t classes);
 int (*kpc_get_thread_counters)(std::uint32_t tid, std::uint32_t count,
@@ -97,6 +109,32 @@ int (*kpep_config_kpc_map)(kpep_config* cfg, std::size_t* buf,
 int (*kpep_config_kpc)(kpep_config* cfg, std::uint64_t* buf, std::size_t size);
 
 // ---- End borrowed declarations ----------------------------------------------
+
+// Config-word bits the kernel fills in itself, so kpc_get_config can return
+// them for a word kpc_set_config was given without them. Ignored by the
+// read-back check, and only on nonzero words. Any other differing bit fails.
+//
+//   bit 17 (0x20000): count this counter in EL0 AArch64 (user mode).
+//
+// From `dyld_info -disassemble` of kperfdata and `objdump --macho -d` of
+// /System/Library/Kernels/kernel.release.t6030, Darwin 24.6.0
+// (xnu-11417.140.69.711.44~1). Can break on any OS update.
+//   kperfdata kpep_config_kpc: when the plist architecture is "arm64" (id 3,
+//     per the strcmp chain in init_db_from_plist), it ORs 0x20000 into the
+//     word only for events added with kpep_config_add_event flag bit 0 (user
+//     space only). We pass flag 0, so the words we write have no mode bits.
+//   Kernel get path (called from _kpc_get_config, 0xfffffe00074879a8): builds
+//     each word as the 16-bit PMESR0/1 event field, plus 0x10000 / 0x20000 /
+//     0xc0000 when PMCR1 bit s / s+8 / s+16 is set, s = index + 2
+//     (index + 26 for configurable indices 6-7). s+8 is EL0 AArch64 enable.
+//   Kernel set path (0xfffffe0007488278): bits 16 and 17 of the word set PMCR1
+//     bits s and s+8; bit 18 sets s+16 only if kernel counting is allowed. A
+//     nonzero word with bits 16-17 clear gets s+8 alone when kernel counting
+//     is not allowed (else s, s+8 and s+16). A zero word gets none.
+// So a nonzero word written with no mode bits reads back with 0x20000 added.
+// The allowed-kernel default would read back 0xf0000 instead; that has not
+// been observed here, so those bits are left out and would still FAIL.
+constexpr std::uint64_t KPC_CFG_KERNEL_SET_BITS = 0x20000;
 
 bool g_loaded = false;
 bool g_active = false;
@@ -136,6 +174,8 @@ bool load_frameworks() {
   WARPROUTE_SYM(k, kpc_force_all_ctrs_get);
   WARPROUTE_SYM(k, kpc_force_all_ctrs_set);
   WARPROUTE_SYM(k, kpc_set_config);
+  WARPROUTE_SYM(k, kpc_get_config);
+  WARPROUTE_SYM(k, kpc_get_config_count);
   WARPROUTE_SYM(k, kpc_set_counting);
   WARPROUTE_SYM(k, kpc_set_thread_counting);
   WARPROUTE_SYM(k, kpc_get_thread_counters);
@@ -167,6 +207,27 @@ void release_config() {
   if (g_db) kpep_db_free(g_db);
   g_cfg = nullptr;
   g_db = nullptr;
+}
+
+// Reads kpc.force_all_ctrs back from the kernel. Returns true only if the read
+// succeeds and reports the counters forced; otherwise prints a FAIL line
+// tagged with `when`.
+bool read_back_forced(const char* when) {
+  int force = 0;
+  int ret = kpc_force_all_ctrs_get(&force);
+  if (ret) {
+    std::fprintf(stderr, "FAIL %s: kpc_force_all_ctrs_get ret=%d errno=%d (%s)\n",
+                 when, ret, errno, std::strerror(errno));
+    return false;
+  }
+  if (force == 0) {
+    std::fprintf(stderr,
+                 "FAIL %s: kpc_force_all_ctrs_get reports force_all_ctrs=%d, "
+                 "counters are NOT forced\n",
+                 when, force);
+    return false;
+  }
+  return true;
 }
 
 }  // namespace
@@ -222,6 +283,7 @@ bool counters_init(const std::vector<std::string>& events) {
   std::vector<const char*> canon(n, nullptr);
   bool any_fixed = false;
   bool any_configurable = false;
+  std::size_t n_configurable = 0;
   for (std::size_t i = 0; i < n; i++) {
     const char* name = events[i].c_str();
     if ((ret = kpep_db_event(g_db, name, &evs[i]))) {
@@ -249,6 +311,7 @@ bool counters_init(const std::vector<std::string>& events) {
       any_fixed = true;
     } else {
       any_configurable = true;
+      n_configurable++;
     }
   }
 
@@ -267,11 +330,37 @@ bool counters_init(const std::vector<std::string>& events) {
   const std::uint32_t want_classes =
       (any_fixed ? KPC_CLASS_FIXED_MASK : 0u) |
       (any_configurable ? KPC_CLASS_CONFIGURABLE_MASK : 0u);
-  if ((classes & want_classes) != want_classes || reg_count == 0) {
+  if ((classes & want_classes) != want_classes) {
     std::fprintf(stderr,
-                 "FAIL kpep_config_kpc_classes: classes=0x%x reg_count=%zu, "
-                 "expected classes & 0x%x == 0x%x and reg_count > 0\n",
-                 classes, reg_count, want_classes, want_classes);
+                 "FAIL kpep_config_kpc_classes: classes=0x%x, expected "
+                 "classes & 0x%x == 0x%x\n",
+                 classes, want_classes, want_classes);
+    release_config();
+    return false;
+  }
+  // reg_count is one word per configurable counter on the PMU, with 0 for
+  // counters no event was placed on (see PROVENANCE). So the check against
+  // the request is on the populated words, not on reg_count itself.
+  std::size_t populated = 0;
+  for (std::size_t k = 0; k < reg_count && k < KPC_MAX_COUNTERS; k++) {
+    if (regs[k] != 0) populated++;
+  }
+  if (reg_count > KPC_MAX_COUNTERS || populated != n_configurable) {
+    std::fprintf(stderr,
+                 "FAIL kpep_config_kpc: reg_count=%zu with %zu nonzero config "
+                 "words, but %zu configurable events were requested\n",
+                 reg_count, populated, n_configurable);
+    release_config();
+    return false;
+  }
+  // kpc_set_config copies kpc_get_config_count(classes) words from regs; if
+  // that is not reg_count, the kernel reads a different layout than kpep built.
+  const std::uint32_t kernel_count = kpc_get_config_count(classes);
+  if (kernel_count != reg_count) {
+    std::fprintf(stderr,
+                 "FAIL kpc_get_config_count(0x%x)=%u but kpep built "
+                 "reg_count=%zu config words\n",
+                 classes, kernel_count, reg_count);
     release_config();
     return false;
   }
@@ -303,12 +392,57 @@ bool counters_init(const std::vector<std::string>& events) {
     release_config();
     return false;
   }
+  if (!read_back_forced("counters_init after kpc_force_all_ctrs_set(1)")) {
+    stop_counting();
+    release_config();
+    return false;
+  }
   if ((ret = kpc_set_config(classes, regs))) {
     std::fprintf(stderr, "FAIL kpc_set_config ret=%d errno=%d (%s)\n", ret,
                  errno, std::strerror(errno));
     stop_counting();
     release_config();
     return false;
+  }
+  {
+    // kernel_count == reg_count <= KPC_MAX_COUNTERS was checked above, so
+    // readback is large enough for kpc_get_config's unsized write.
+    std::uint64_t readback[KPC_MAX_COUNTERS] = {};
+    if ((ret = kpc_get_config(classes, readback))) {
+      std::fprintf(stderr, "FAIL kpc_get_config ret=%d errno=%d (%s)\n", ret,
+                   errno, std::strerror(errno));
+      stop_counting();
+      release_config();
+      return false;
+    }
+    bool config_ok = true;
+    for (std::size_t k = 0; k < reg_count; k++) {
+      // The kernel only adds its default mode bits to a nonzero word.
+      const std::uint64_t ignored = regs[k] ? KPC_CFG_KERNEL_SET_BITS : 0;
+      if (((readback[k] ^ regs[k]) & ~ignored) == 0) continue;
+      config_ok = false;
+      // The low 16 bits of a word are the event number (kpep_config_kpc).
+      const char* who = regs[k] ? "unmatched event" : "unused counter";
+      for (std::size_t i = 0; i < n; i++) {
+        if (regs[k] != 0 && !(evs[i]->flags & 1u) &&
+            (regs[k] & 0xffffu) == evs[i]->number) {
+          who = events[i].c_str();
+          break;
+        }
+      }
+      std::fprintf(stderr,
+                   "FAIL kpc_get_config: config word %zu (%s) wrote 0x%llx, "
+                   "read back 0x%llx (xor 0x%llx, ignoring 0x%llx)\n",
+                   k, who, (unsigned long long)regs[k],
+                   (unsigned long long)readback[k],
+                   (unsigned long long)(regs[k] ^ readback[k]),
+                   (unsigned long long)ignored);
+    }
+    if (!config_ok) {
+      stop_counting();
+      release_config();
+      return false;
+    }
   }
   if ((ret = kpc_set_counting(classes)) ||
       (ret = kpc_set_thread_counting(classes))) {
@@ -360,6 +494,71 @@ CounterReading counters_read() {
     r.instructions = r.events[static_cast<std::size_t>(g_insns_idx)];
   }
   return r;
+}
+
+bool counters_self_test() {
+  if (!g_active) {
+    std::fprintf(stderr,
+                 "FAIL counters_self_test: counters_init() has not succeeded\n");
+    return false;
+  }
+  // One cache line on each of kPages fresh anonymous pages, written (faulting
+  // each page in) and then read back. That is thousands of distinct cache
+  // lines and pages: far past L1D and the L1 dTLB, and every page is new to
+  // the TLB, so every listed event should be nonzero if its counter is live.
+  static constexpr std::size_t kPages = 4096;
+  const std::size_t page = static_cast<std::size_t>(getpagesize());
+  const std::size_t len = kPages * page;
+  void* mem = mmap(nullptr, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON,
+                   -1, 0);
+  if (mem == MAP_FAILED) {
+    std::fprintf(stderr, "FAIL counters_self_test: mmap %zu bytes errno=%d (%s)\n",
+                 len, errno, std::strerror(errno));
+    return false;
+  }
+  // volatile so the compiler cannot forward the stores to the loads.
+  auto* bytes = static_cast<volatile unsigned char*>(mem);
+  volatile unsigned sink = 0;
+
+  CounterReading before = counters_read();
+  for (std::size_t i = 0; i < kPages; i++) {
+    bytes[i * page + (i * 64) % page] = static_cast<unsigned char>(i | 1u);
+  }
+  for (std::size_t i = 0; i < kPages; i++) {
+    sink = sink + bytes[i * page + (i * 64) % page];
+  }
+  CounterReading after = counters_read();
+  munmap(mem, len);
+
+  bool ok = after.events.size() == g_names.size() &&
+            before.events.size() == g_names.size();
+  for (std::size_t i = 0; ok && i < g_names.size(); i++) {
+    if (after.events[i] - before.events[i] == 0) ok = false;
+  }
+  if (ok) {
+    std::fprintf(stderr, "counters self-test: ok (%zu pages touched)\n", kPages);
+    return true;
+  }
+  std::fprintf(stderr,
+               "FAIL counters_self_test: an event counted exactly 0 over %zu "
+               "distinct pages; counters are not live\n",
+               kPages);
+  for (std::size_t i = 0; i < g_names.size(); i++) {
+    const bool have = i < before.events.size() && i < after.events.size();
+    const std::uint64_t d = have ? after.events[i] - before.events[i] : 0;
+    std::fprintf(stderr, "FAIL   %-26s delta=%llu%s\n", g_names[i].c_str(),
+                 (unsigned long long)d, d == 0 ? "  <-- zero" : "");
+  }
+  return false;
+}
+
+bool counters_still_forced() {
+  if (!g_active) {
+    std::fprintf(stderr,
+                 "FAIL counters_still_forced: counters are not active\n");
+    return false;
+  }
+  return read_back_forced("counters_still_forced");
 }
 
 void counters_shutdown() {

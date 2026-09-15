@@ -11,7 +11,7 @@
 #include <random>
 
 // 32 KB chain, one quarter of the 128 KB L1d.
-static constexpr size_t BUF_BYTES = 32 * 1024;
+static constexpr size_t BUF_BYTES = 256 * 1024;
 static constexpr size_t N_ELEMS   = BUF_BYTES / sizeof(size_t);
 static constexpr size_t N_HOPS    = 10'000'000;
 
@@ -51,6 +51,12 @@ int main() {
 
     if (!warproute::counters_init(events)) {
         std::fprintf(stderr, "counters unavailable\n");
+        return 1;
+    }
+    if (!warproute::counters_self_test()) {
+        std::fprintf(stderr, "ABORT: counter self-test failed, PMU counters "
+                             "are not live. No measurement taken.\n");
+        warproute::counters_shutdown();
         return 1;
     }
 
@@ -95,7 +101,19 @@ int main() {
     std::printf("insns/hop        : %.3f\n", ins_per_hop);
     std::printf("checksum p       : %zu\n", p);
 
+    // Counters can be lost mid-run. Checked before shutdown, which clears
+    // the force flag itself.
+    const bool still_forced = warproute::counters_still_forced();
+    if (!still_forced) {
+        const char* msg =
+            "WARNING: PMU counters were NOT forced at end of run. The counts "
+            "above may have been taken with counters lost midway and are NOT "
+            "valid.\n";
+        std::printf("%s", msg);
+        std::fprintf(stderr, "%s", msg);
+    }
+
     warproute::counters_shutdown();
     std::printf("warm checksum: %zu\n", warm);
-    return 0;
+    return still_forced ? 0 : 2;
 }

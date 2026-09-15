@@ -1,0 +1,163 @@
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
+=== BUF_BYTES = 32 * 1024 ===
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+hops             : 10000000
+buffer           : 32768 bytes (4096 elements)
+cycles           : 40089601
+instructions     : 30041149
+L1D_CACHE_MISS_LD_NONSPEC : 687
+L1D_TLB_MISS_NONSPEC      : 42
+L2_TLB_MISS_DATA          : 123
+L1D_TLB_ACCESS            : 10059637
+cycles/hop       : 4.009
+insns/hop        : 3.004
+checksum p       : 1771
+warm checksum: 5313
+
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
+=== BUF_BYTES = 256 * 1024 ===
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+hops             : 10000000
+buffer           : 262144 bytes (32768 elements)
+cycles           : 157990844
+instructions     : 30046838
+L1D_CACHE_MISS_LD_NONSPEC : 0
+L1D_TLB_MISS_NONSPEC      : 0
+L2_TLB_MISS_DATA          : 0
+L1D_TLB_ACCESS            : 0
+cycles/hop       : 15.799
+insns/hop        : 3.005
+checksum p       : 6120
+warm checksum: 18360
+
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
+=== BUF_BYTES = 512 * 1024 ===
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+hops             : 10000000
+buffer           : 524288 bytes (65536 elements)
+cycles           : 208818170
+instructions     : 30069192
+L1D_CACHE_MISS_LD_NONSPEC : 7929204
+L1D_TLB_MISS_NONSPEC      : 46
+L2_TLB_MISS_DATA          : 22
+L1D_TLB_ACCESS            : 10114224
+cycles/hop       : 20.882
+insns/hop        : 3.007
+checksum p       : 33261
+warm checksum: 99783
+
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
+=== BUF_BYTES = 1024 * 1024 ===
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+hops             : 10000000
+buffer           : 1048576 bytes (131072 elements)
+cycles           : 231657248
+instructions     : 30101118
+L1D_CACHE_MISS_LD_NONSPEC : 9006262
+L1D_TLB_MISS_NONSPEC      : 169
+L2_TLB_MISS_DATA          : 48
+L1D_TLB_ACCESS            : 10050729
+cycles/hop       : 23.166
+insns/hop        : 3.010
+checksum p       : 50293
+warm checksum: 150879
+
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
+=== BUF_BYTES = 2 * 1024 * 1024 ===
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+hops             : 10000000
+buffer           : 2097152 bytes (262144 elements)
+cycles           : 243007666
+instructions     : 30232030
+L1D_CACHE_MISS_LD_NONSPEC : 9505301
+L1D_TLB_MISS_NONSPEC      : 3000
+L2_TLB_MISS_DATA          : 27
+L1D_TLB_ACCESS            : 10026415
+cycles/hop       : 24.301
+insns/hop        : 3.023
+checksum p       : 41289
+warm checksum: 123867
+
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
+=== BUF_BYTES = 64 * 1024 * 1024 ===
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+hops             : 10000000
+buffer           : 67108864 bytes (8388608 elements)
+cycles           : 2201875084
+instructions     : 30565064
+L1D_CACHE_MISS_LD_NONSPEC : 9983033
+L1D_TLB_MISS_NONSPEC      : 9610035
+L2_TLB_MISS_DATA          : 2512672
+L1D_TLB_ACCESS            : 22124681
+cycles/hop       : 220.188
+insns/hop        : 3.057
+checksum p       : 415061
+warm checksum: 1245183
+
+=== restoring BUF_BYTES = 32 * 1024 ===
+[ 27%] Built target warproute
+[ 72%] Built target probe
+[ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o
+[ 83%] Linking CXX executable counters
+[ 88%] Built target counters
+[100%] Built target tests
