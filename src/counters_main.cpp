@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
+#include <string>
 #include <vector>
 #include <numeric>
 #include <random>
@@ -36,7 +37,19 @@ static std::vector<size_t> build_chain(size_t n, uint32_t seed) {
 int main() {
     std::vector<size_t> chain = build_chain(N_ELEMS, 12345);
 
-    if (!warproute::counters_init()) {
+    // Two fixed counters first, then the configurable events. Names only;
+    // kpep resolves numbers and slots.
+    static constexpr size_t FIRST_PMU_EVENT = 2;
+    const std::vector<std::string> events = {
+        "FIXED_CYCLES",
+        "FIXED_INSTRUCTIONS",
+        "L1D_CACHE_MISS_LD_NONSPEC",
+        "L1D_TLB_MISS_NONSPEC",
+        "L2_TLB_MISS_DATA",
+        "L1D_TLB_ACCESS",
+    };
+
+    if (!warproute::counters_init(events)) {
         std::fprintf(stderr, "counters unavailable\n");
         return 1;
     }
@@ -74,6 +87,10 @@ int main() {
                 BUF_BYTES, N_ELEMS);
     std::printf("cycles           : %llu\n", (unsigned long long)cycles);
     std::printf("instructions     : %llu\n", (unsigned long long)insns);
+    for (size_t i = FIRST_PMU_EVENT; i < events.size(); i++) {
+        uint64_t d = after.events[i] - before.events[i];
+        std::printf("%-26s: %llu\n", events[i].c_str(), (unsigned long long)d);
+    }
     std::printf("cycles/hop       : %.3f\n", cyc_per_hop);
     std::printf("insns/hop        : %.3f\n", ins_per_hop);
     std::printf("checksum p       : %zu\n", p);

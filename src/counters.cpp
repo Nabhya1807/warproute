@@ -19,6 +19,16 @@
 //   Everything else: the dlopen/dlsym loader and FAIL diagnostics (ported from
 //   ~/scratch/pmu-spike/pmu_probe.c), the init/read/shutdown state machine,
 //   cleanup on partial failure, and the CounterReading API in counters.hpp.
+//
+//   The kpep_event field layout below is also this project's, NOT the gist's.
+//   The gist declares `u8 number` at 0x2c and is_fixed at 0x2f, but as3.plist
+//   has event numbers above 255 (L2_TLB_MISS_DATA = 1035). Offsets were read
+//   from `dyld_info -disassemble` of kperfdata on Darwin 24.6.0:
+//     kpep_event_name/description/errata/alias load 0x00/0x08/0x10/0x18,
+//     add_event_internal reads fallback at 0x20, counters_mask (u32) at 0x28,
+//     and tests bit 0 of the byte at 0x30 to take the fixed-counter path,
+//     kpep_config_kpc loads the event number with `ldrh [ev, #0x2c]`.
+//   Like the rest of this file, this can break on any OS update.
 // =============================================================================
 
 #include "counters.hpp"
@@ -30,6 +40,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace warproute {
 namespace {
@@ -42,7 +54,24 @@ constexpr std::size_t KPC_MAX_COUNTERS = 32;
 
 struct kpep_db;
 struct kpep_config;
-struct kpep_event;
+
+// Layout from disassembly, see PROVENANCE. Only name, number and flags are
+// read; nothing here is ever written.
+struct kpep_event {
+  const char* name;
+  const char* description;
+  const char* errata;
+  const char* alias;
+  const char* fallback;
+  std::uint32_t counters_mask;
+  std::uint16_t number;
+  std::uint8_t umask;
+  std::uint8_t reserved;
+  std::uint8_t flags;  // bit 0: fixed counter
+};
+static_assert(offsetof(kpep_event, counters_mask) == 0x28, "kpep_event layout");
+static_assert(offsetof(kpep_event, number) == 0x2c, "kpep_event layout");
+static_assert(offsetof(kpep_event, flags) == 0x30, "kpep_event layout");
 
 // kperf.framework
 int (*kpc_force_all_ctrs_get)(int* val);
@@ -69,15 +98,16 @@ int (*kpep_config_kpc)(kpep_config* cfg, std::uint64_t* buf, std::size_t size);
 
 // ---- End borrowed declarations ----------------------------------------------
 
-// Order matters: index i here is map[i] below and a field of CounterReading.
-const char* const kEvents[3] = {"FIXED_CYCLES", "FIXED_INSTRUCTIONS",
-                                "INST_ALL"};
-
 bool g_loaded = false;
 bool g_active = false;
 kpep_db* g_db = nullptr;
 kpep_config* g_cfg = nullptr;
+// Index i is the i-th caller-supplied event: g_map[i] is its counter slot.
+std::vector<std::string> g_names;
 std::size_t g_map[KPC_MAX_COUNTERS] = {};
+// Index into g_names of FIXED_CYCLES / FIXED_INSTRUCTIONS, or -1 if absent.
+long g_cycles_idx = -1;
+long g_insns_idx = -1;
 
 #define WARPROUTE_SYM(h, name)                                                \
   do {                                                                        \
@@ -142,7 +172,21 @@ void release_config() {
 }  // namespace
 
 bool counters_init() {
-  if (g_active) return true;
+  return counters_init({"FIXED_CYCLES", "FIXED_INSTRUCTIONS", "INST_ALL"});
+}
+
+bool counters_init(const std::vector<std::string>& events) {
+  if (g_active) {
+    if (events == g_names) return true;
+    std::fprintf(stderr, "FAIL counters_init: already active with a different "
+                         "event list; call counters_shutdown() first\n");
+    return false;
+  }
+  if (events.empty() || events.size() > KPC_MAX_COUNTERS) {
+    std::fprintf(stderr, "FAIL counters_init: %zu events, need 1..%zu\n",
+                 events.size(), KPC_MAX_COUNTERS);
+    return false;
+  }
   if (!load_frameworks()) return false;
 
   int ret = 0;
@@ -171,20 +215,40 @@ bool counters_init() {
     return false;
   }
 
-  for (int i = 0; i < 3; i++) {
-    kpep_event* ev = nullptr;
-    if ((ret = kpep_db_event(g_db, kEvents[i], &ev))) {
-      std::fprintf(stderr, "FAIL event %s not in db ret=%d\n", kEvents[i],
-                   ret);
+  const std::size_t n = events.size();
+  std::vector<kpep_event*> evs(n, nullptr);
+  // kpep's canonical name for each requested event, before add_event can swap
+  // a fixed event for its fallback.
+  std::vector<const char*> canon(n, nullptr);
+  bool any_fixed = false;
+  bool any_configurable = false;
+  for (std::size_t i = 0; i < n; i++) {
+    const char* name = events[i].c_str();
+    if ((ret = kpep_db_event(g_db, name, &evs[i]))) {
+      std::fprintf(stderr, "FAIL event %s not in db ret=%d\n", name, ret);
       release_config();
       return false;
     }
+    canon[i] = evs[i]->name;
     std::uint32_t err = 0;
-    if ((ret = kpep_config_add_event(g_cfg, &ev, 0, &err))) {
-      std::fprintf(stderr, "FAIL kpep_config_add_event %s ret=%d err=%u\n",
-                   kEvents[i], ret, err);
+    if ((ret = kpep_config_add_event(g_cfg, &evs[i], 0, &err))) {
+      std::fprintf(stderr, "FAIL kpep_config_add_event %s ret=%d err=0x%x\n",
+                   name, ret, err);
+      // err is a bitmask of already-added events (by add order, which is the
+      // caller's order) occupying every counter this event could use.
+      for (std::size_t j = 0; j < i && j < 32; j++) {
+        if (err & (1u << j)) {
+          std::fprintf(stderr, "FAIL   %s conflicts with %s\n", name,
+                       events[j].c_str());
+        }
+      }
       release_config();
       return false;
+    }
+    if (evs[i]->flags & 1u) {
+      any_fixed = true;
+    } else {
+      any_configurable = true;
     }
   }
 
@@ -201,7 +265,8 @@ bool counters_init() {
   }
 
   const std::uint32_t want_classes =
-      KPC_CLASS_FIXED_MASK | KPC_CLASS_CONFIGURABLE_MASK;
+      (any_fixed ? KPC_CLASS_FIXED_MASK : 0u) |
+      (any_configurable ? KPC_CLASS_CONFIGURABLE_MASK : 0u);
   if ((classes & want_classes) != want_classes || reg_count == 0) {
     std::fprintf(stderr,
                  "FAIL kpep_config_kpc_classes: classes=0x%x reg_count=%zu, "
@@ -210,13 +275,26 @@ bool counters_init() {
     release_config();
     return false;
   }
-  for (int i = 0; i < 3; i++) {
+  for (std::size_t i = 0; i < n; i++) {
     if (g_map[i] >= KPC_MAX_COUNTERS) {
       std::fprintf(stderr, "FAIL kpc map: %s -> %zu out of range (max %zu)\n",
-                   kEvents[i], g_map[i], KPC_MAX_COUNTERS);
+                   events[i].c_str(), g_map[i], KPC_MAX_COUNTERS);
       release_config();
       return false;
     }
+  }
+  for (std::size_t i = 0; i < n; i++) {
+    const bool fell_back = evs[i]->name && canon[i] &&
+                           std::strcmp(evs[i]->name, canon[i]) != 0;
+    if (evs[i]->flags & 1u) {
+      std::fprintf(stderr, "event %-26s number=fixed slot=%zu",
+                   events[i].c_str(), g_map[i]);
+    } else {
+      std::fprintf(stderr, "event %-26s number=%-5u slot=%zu",
+                   events[i].c_str(), (unsigned)evs[i]->number, g_map[i]);
+    }
+    if (fell_back) std::fprintf(stderr, " (fallback %s)", evs[i]->name);
+    std::fprintf(stderr, "\n");
   }
 
   if ((ret = kpc_force_all_ctrs_set(1))) {
@@ -241,6 +319,21 @@ bool counters_init() {
     return false;
   }
 
+  // Match on the canonical requested name, so aliases ("Cycles") count and a
+  // fallback (FIXED_INSTRUCTIONS -> INST_ALL) still fills the named field.
+  g_cycles_idx = -1;
+  g_insns_idx = -1;
+  for (std::size_t i = 0; i < n; i++) {
+    if (!canon[i]) continue;
+    if (g_cycles_idx < 0 && std::strcmp(canon[i], "FIXED_CYCLES") == 0) {
+      g_cycles_idx = static_cast<long>(i);
+    } else if (g_insns_idx < 0 &&
+               std::strcmp(canon[i], "FIXED_INSTRUCTIONS") == 0) {
+      g_insns_idx = static_cast<long>(i);
+    }
+  }
+
+  g_names = events;
   g_active = true;
   return true;
 }
@@ -253,11 +346,19 @@ CounterReading counters_read() {
   if (ret) {
     std::fprintf(stderr, "FAIL kpc_get_thread_counters ret=%d errno=%d\n", ret,
                  errno);
+    r.events.assign(g_names.size(), 0);
     return r;
   }
-  r.cycles = buf[g_map[0]];
-  r.instructions = buf[g_map[1]];
-  r.inst_all = buf[g_map[2]];
+  // Allocate after the kpc read. In a before/after pair, the 'before'
+  // reading's allocation still falls inside the measured delta.
+  r.events.resize(g_names.size());
+  for (std::size_t i = 0; i < g_names.size(); i++) r.events[i] = buf[g_map[i]];
+  if (g_cycles_idx >= 0) {
+    r.cycles = r.events[static_cast<std::size_t>(g_cycles_idx)];
+  }
+  if (g_insns_idx >= 0) {
+    r.instructions = r.events[static_cast<std::size_t>(g_insns_idx)];
+  }
   return r;
 }
 
@@ -265,6 +366,9 @@ void counters_shutdown() {
   if (!g_active) return;
   stop_counting();
   release_config();
+  g_names.clear();
+  g_cycles_idx = -1;
+  g_insns_idx = -1;
   g_active = false;
 }
 
