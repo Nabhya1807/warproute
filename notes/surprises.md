@@ -27,6 +27,58 @@ restrict the chase to slots within ~32 pages. Same footprint, TLB pressure held
 near zero. If latency drops to L2-hit level, TLB explains it; if it stays at
 ~13 ns, it does not.
 
+### Day 8 update: two-population model   [still PARTIAL]
+
+Latency re-measured in cycles across the climb:
+
+    buffer     cycles/hop     f = 128 KB / buffer
+    256 KB        16.009            0.500
+    512 KB        21.077            0.250
+    1 MB          23.180            0.125
+    2 MB          24.020            0.0625
+
+**TLB reach is ruled out by arithmetic.** At 16 KB pages, 2 MB is 128 pages
+against the 160-entry L1 dTLB measured on Day 5. Every size in the climb
+fits inside TLB reach, so misses cannot occur there. The portion of this
+entry attributing the climb to TLB pressure applies only above 2.5 MB.
+
+**The climb decelerates**, each doubling adding roughly half what the
+previous one added: +5.07, +2.10, +0.84. A curve converging on an
+asymptote, not a step.
+
+**Hypothesis.** The measurement is a blend, not a single population. The
+buffer exceeds L1, but L1 still holds 128 KB of the chain, so a fraction f
+of hops are L1 hits at 4.005 cycles and the rest are L2 accesses at L:
+
+    measured = f * 4.005 + (1 - f) * L
+
+Solving for L at each size:
+
+    512 KB    f = 0.250      L = 26.8
+    1 MB      f = 0.125      L = 25.9
+    2 MB      f = 0.0625     L = 25.4
+
+Three independent sizes agree within 5%.
+
+**Implication: L2 latency on M3 Pro is approximately 26 cycles.** The climb
+is not a property of the L2. It is the L1-resident fraction decaying as the
+working set grows.
+
+**The point that does not fit.** 256 KB gives f = 0.5 and implies L = 28.0,
+drifting from the other three. At only 2x L1 capacity the uniform-spread
+assumption is weakest, since associativity effects dominate at low capacity
+multiples. See the Day 7 conflict-miss entry for the same physics in a
+different experiment.
+
+**Why this stays PARTIAL.** Every f above is calculated from the capacity
+ratio, not measured. The model assumes the chain spreads uniformly across
+cache sets. Confirmation requires L1D_CACHE_MISS_LD_NONSPEC (event 191) to
+measure the actual L1 hit fraction at each size. If the measured fractions
+land near 0.25 / 0.125 / 0.0625, this closes. If not, the climb needs a
+different explanation.
+
+Data: results/2026-09-15/latency_cycles.txt
+
 ---
 
 ## Measured TLB knee sits above the published 128 entries   [OPEN]
@@ -369,25 +421,56 @@ Not investigated further. The ratio that the day-2 conclusions actually rest on
 inside the published 1:3-4:50-100 range, so nothing downstream depends on the
 absolute number being right.
 
+**Day 8 note.** Direct cycle measurement at 64 MB gives 338.519 cycles/hop
+= 84.2 ns at 4.021 GHz, inside the expected 90-100 ns range. This suggests
+the same cold-clock artifact identified in the L1 hit latency entry. NOT
+resolved here: the gap is larger than the L1 case, and the original probe
+should be rerun under counters before this closes.
+
+Data: results/2026-09-15/latency_cycles.txt
+
 ---
 
-## L1 hit latency is ~6.2 cycles against a published ~4   [OPEN]
+## L1 hit latency is ~6.2 cycles against a published ~4   [RESOLVED]
 
-*(Merged from the stray root-level `Surprise.md`, Day 2.)*
+**Original observation (Day 2/4).** The pointer chase measured 1.54 ns/hop
+in the L1-resident region. Converted at the M3 Pro's published P-core
+clock, that implied ~6.2 cycles, against a published L1 hit latency near 4.
 
-The measured 1.53 ns L1 hit latency works out to roughly 6.2 cycles at the
-nominal P-core clock, where published figures for Apple L1d load-to-use are
-around 4.
+**Why it stayed open.** macOS exposes no userspace cycle counter, so the
+conversion depended on an assumed frequency. The anomaly could not be
+separated from an error in that assumption.
 
-Recorded at the time as unresolvable with the tools then available: the probe
-measures wall-clock nanoseconds, and converting to cycles requires assuming a
-clock that DVFS is actively changing (see the SAXPY entry above for what that
-assumption costs). The workaround adopted was to report cache-level *ratios*
-rather than absolute cycle counts throughout, which is why day 2 concludes with
-1:4.0:103 rather than a cycles-per-access table.
+**Resolution (Day 8).** With kperf/kpc counter access working, cycles were
+read directly around the same chase. A 32 KB chain (one quarter of the
+128 KB L1d), 10M dependent hops, compiler barrier per hop, three untimed
+warmup passes:
 
-Day 8 is planned to add hardware performance counters. A real cycle counter
-would settle this directly, and it is worth re-checking then.
+    4.005 / 4.011 / 4.018 cycles per hop   (three runs, 0.3% spread)
+    3.002 instructions per hop             (confirms a dependent load chain)
+    checksum identical across runs (1771)
+
+L1 hit latency is 4.0 cycles, matching the published figure.
+
+**What the 6.2 actually was.** The Day 2 nanoseconds were correct. The
+frequency used to convert them was not.
+
+    4.021 GHz / (6.19 / 4.005) = 2.60 GHz
+
+That is the cold-core frequency observed in run 1 of the Day 8 counter
+validation (2.608 GHz, ramping to 4.02 over three runs). The Day 2 chase
+ran on a core still climbing under DVFS.
+
+**Methodology consequence.** Any cycle count derived by dividing a
+wall-clock measurement by an assumed frequency silently inherits the
+frequency governor's state at measurement time, and the error is
+undetectable without a cycle counter. This is stronger than the Day 3 DVFS
+entry, which only established that cold runs read low on throughput.
+
+Every ns-derived cycle figure taken before Day 8 should be treated as
+suspect unless the run was demonstrably warm.
+
+Data: results/2026-09-15/latency_cycles.txt
 
 ---
 
