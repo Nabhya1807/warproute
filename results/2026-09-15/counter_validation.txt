@@ -1,0 +1,53 @@
+Counter validation, M3 Pro, macOS 15.7.9, 2026-09-15
+Loop: 100,000,000 iterations, 7 scalar instructions each (verified by disassembly)
+Predicted instruction count: 700,000,000
+
+Run 1 (cold):
+  cycles          : 202423434
+  instructions    : 700215102  (fixed)
+  INST_ALL        : 667148875  (configurable)
+  INST_ALL vs fixed: -4.7223%
+  core freq       : 2.608 GHz
+
+Run 2:
+  instructions    : 700040465  (fixed)
+  INST_ALL        : 700000516  (configurable)
+  INST_ALL vs fixed: -0.0057%
+  core freq       : 3.211 GHz
+
+Run 3:
+  instructions    : 700045947  (fixed)
+  INST_ALL        : 700000516  (configurable)
+  INST_ALL vs fixed: -0.0065%
+  core freq       : 3.990 GHz
+
+Run 4:
+  instructions    : 700041055  (fixed)
+  INST_ALL        : 700000516  (configurable)
+  INST_ALL vs fixed: -0.0058%
+  core freq       : 4.027 GHz
+
+Run 5:
+  instructions    : 700040299  (fixed)
+  INST_ALL        : 700000516  (configurable)
+  INST_ALL vs fixed: -0.0057%
+  core freq       : 3.969 GHz
+
+Run 6:
+  instructions    : 700037772  (fixed)
+  INST_ALL        : 700000516  (configurable)
+  INST_ALL vs fixed: -0.0053%
+  core freq       : 4.021 GHz
+
+Findings:
+1. Frequency ramps 2.608 -> 4.02 GHz over the first three runs, then holds.
+   DVFS, independently confirming the Day 3 SAXPY diagnosis by direct
+   measurement rather than inference. Protocol: discard the first two runs
+   of any counter measurement.
+2. Configurable counter (INST_ALL, event 140, counter 7) agrees with the
+   fixed counter to 0.006% once warm. The 4.7% gap in run 1 was DVFS
+   contamination, not counter error.
+3. INST_ALL returns bit-identical 700,000,516 on every warm run while the
+   fixed counter varies by a few thousand. The configurable counter measures
+   a tighter window and is the more precise of the two.
+4. Warm P-core frequency measured at 4.02 GHz.

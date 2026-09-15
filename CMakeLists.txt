@@ -43,6 +43,16 @@ target_compile_options(probe PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLA
 # Apple Accelerate supplies the cblas_sgemm reference ceiling (day 7).
 target_link_libraries(probe PRIVATE "-framework Accelerate")
 
+# PMU counters via Apple's private kperf frameworks (dlopen'd at runtime, so no
+# link-time framework dependency). Separate from probe/warproute because it
+# needs root to run: sudo ./build/counters
+add_executable(counters
+  src/counters_main.cpp
+  src/counters.cpp)
+target_include_directories(counters PRIVATE include)
+target_compile_options(counters PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
+target_link_libraries(counters PRIVATE ${CMAKE_DL_LIBS})
+
 if(CUDAToolkit_FOUND)
   target_compile_definitions(warproute PRIVATE WARPROUTE_HAVE_CUDA)
   target_link_libraries(warproute PRIVATE CUDA::cudart)
