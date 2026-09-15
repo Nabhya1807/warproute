@@ -1,0 +1,89 @@
+Memory hierarchy latency in cycles, measured directly
+M3 Pro, macOS 15.7.9, 2026-09-15
+
+Method: random-permutation pointer chase, 10,000,000 dependent hops,
+cycles read from the fixed PMU counter (kperf/kpc). No wall clock and
+no frequency conversion anywhere in the calculation. Compiler barrier
+(asm volatile "" : "+r"(p)) on every hop. Three untimed warmup passes
+inside the binary to clear the DVFS ramp.
+
+buffer      elements    cycles/hop   insns/hop
+32 KB           4096         4.005       3.002
+256 KB         32768        16.009       3.015
+512 KB         65536        21.077       3.020
+1 MB          131072        23.180       3.007
+2 MB          262144        24.020       3.012
+64 MB        8388608       338.519       3.111
+
+Repeatability at 32 KB, three consecutive runs:
+  4.005 / 4.011 / 4.018   (spread 0.3%)
+  checksum identical (1771) across all runs
+
+insns/hop sits at 3.00 for all in-cache sizes, confirming the loop
+compiled to a dependent load chain. The drift to 3.111 at 64 MB is
+page-walk machinery appearing in the instruction stream once the
+working set exceeds the 2.5 MB TLB reach measured on Day 5.
+
+-------------------------------------------------------------------
+FINDING 1: L1 hit latency is 4.0 cycles, matching Apple's published
+figure. The previously OPEN 6.2-cycle anomaly is an artifact.
+
+The 6.2 figure came from dividing a Day 2 nanosecond measurement
+(1.54 ns/hop) by a frequency measured on Day 8 (4.021 GHz). The two
+came from different runs. 4.021 / (6.19/4.005) = 2.60 GHz, which
+matches the cold-core frequency observed in run 1 of today's counter
+validation (2.608 GHz).
+
+The Day 2 chase almost certainly ran on a core still ramping under
+DVFS. The nanoseconds were recorded correctly; the conversion used
+the wrong clock.
+
+Methodology consequence: any cycle count derived from nanoseconds
+silently inherits the frequency governor's state at measurement time,
+and the error is undetectable without a cycle counter.
+
+-------------------------------------------------------------------
+FINDING 2: the "L2 plateau climb" is L1 residency decay, not an L2
+property. Candidate resolution for the PARTIAL entry in surprises.md.
+
+The climb from 16.0 to 24.0 cycles across 256 KB to 2 MB decelerates,
+each doubling adding roughly half what the previous one added:
+  256 KB -> 512 KB   +5.07
+  512 KB -> 1 MB     +2.10
+  1 MB   -> 2 MB     +0.84
+
+Every size in this range fits inside the 2.5 MB TLB reach measured on
+Day 5 (2 MB = 128 pages against 160 L1 dTLB entries), so TLB misses
+cannot be the cause.
+
+Two-population model: with L1 = 4.005 cycles, pure L2 = L, and
+fraction f of accesses resident in the 128 KB L1,
+  average = f*4.005 + (1-f)*L
+
+  size     f (uniform)   implied L
+  512 KB      0.250          26.8
+  1 MB        0.125          25.9
+  2 MB        0.0625         25.4
+
+Three independent sizes agree within 5%.
+
+ESTIMATE: L2 latency on M3 Pro is approximately 26 cycles.
+
+The 256 KB point (f = 0.5, implied L = 28.0) drifts from the others.
+At only 2x L1 capacity the uniform-spread assumption is weakest, since
+associativity effects dominate at low capacity multiples (cf. the Day 7
+conflict-miss finding).
+
+STATUS: hypothesis with quantitative support, not proven. Confirmation
+requires L1D_CACHE_MISS_LD_NONSPEC (event 191) to verify the measured
+L1 hit fraction matches the f values above.
+
+-------------------------------------------------------------------
+FINDING 3: DRAM latency is 338.5 cycles = 84.2 ns at 4.021 GHz.
+
+surprises.md carries an OPEN entry citing 158 ns against an expected
+90-100 ns. 84.2 ns falls inside the expected range, suggesting the
+same cold-clock artifact as Finding 1.
+
+NOT closed here: the gap is larger than the L1 case and the original
+probe should be rerun under counters before the entry is resolved.
