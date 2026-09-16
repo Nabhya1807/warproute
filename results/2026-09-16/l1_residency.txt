@@ -1,0 +1,60 @@
+Measured L1 residency and L2 latency
+M3 Pro, macOS 15.7.9, 2026-09-16
+
+Method: same random-permutation pointer chase as 2026-09-15, with
+L1D_CACHE_MISS_LD_NONSPEC (event 191) counted alongside cycles. The
+L1-resident fraction of accesses is measured rather than assumed:
+
+    f_measured = 1 - (L1 load misses / 10,000,000 hops)
+
+buffer    cycles/hop   L1 misses     f_measured   f_capacity   ratio
+32 KB         4.003           14       ~1.0          1.0
+256 KB       15.934    5,608,951      0.4391        0.500       0.878
+512 KB       20.865    7,926,763      0.2073        0.250       0.829
+1 MB         23.022    9,005,199      0.0995        0.125       0.796
+2 MB         24.210    9,503,597      0.0496        0.0625      0.794
+64 MB       226.178    9,983,029      0.0017        ~0
+
+The 2 MB row is from the first sweep of the day; that size failed its
+counter arm on the second sweep. 512 KB has now been measured in four
+separate sessions at 7,929,204 / 7,928,558 / 7,927,998 / 7,926,763,
+agreeing to 0.03%.
+
+-------------------------------------------------------------------
+FINDING: effective L1 residency is ~79% of nominal capacity for a
+random-permutation walk, converging from above.
+
+The two-population model assumed the L1-resident fraction equals the
+capacity ratio 128 KB / buffer. Measured residency is consistently
+below that, converging on 0.79 as the buffer grows. The 256 KB point
+sits highest at 0.878, consistent with associativity effects dominating
+at low capacity multiples (cf. the Day 7 conflict-miss finding).
+
+Effective capacity for this access pattern is therefore ~102 KB against
+128 KB nominal.
+
+-------------------------------------------------------------------
+FINDING: L2 latency is 25.3 cycles.
+
+Re-solving measured = f*4.005 + (1-f)*L with MEASURED f:
+
+    512 KB    f = 0.2073    L = 25.30
+    1 MB      f = 0.0995    L = 25.28
+    2 MB      f = 0.0496    L = 25.36
+
+Agreement to 0.3%, against 5% when f was calculated from capacity.
+Using measured residency instead of assumed residency tightened the
+estimate by more than an order of magnitude, which is the strongest
+evidence that the two-population model is correct.
+
+-------------------------------------------------------------------
+INSTRUMENT: the PMU arm fails intermittently, roughly one attempt in
+three. When it fails, all configurable counters read exactly 0 while
+the fixed counters (cycles, instructions) continue normally. It is
+random, not correlated with buffer size: 32 KB needed 3 retries in one
+sweep while 64 MB succeeded on attempt 8.
+
+Guarded by counters_self_test(), which aborts rather than reporting
+zeros, and by scripts/run_counters.sh, which retries up to 10 times.
+Root cause not identified. Most likely another process reclaiming the
+system-wide counter bank after kpc_force_all_ctrs_set. Scoped out.

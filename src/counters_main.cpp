@@ -11,7 +11,7 @@
 #include <random>
 
 // 32 KB chain, one quarter of the 128 KB L1d.
-static constexpr size_t BUF_BYTES = 256 * 1024;
+static constexpr size_t BUF_BYTES = 32 * 1024;
 static constexpr size_t N_ELEMS   = BUF_BYTES / sizeof(size_t);
 static constexpr size_t N_HOPS    = 10'000'000;
 

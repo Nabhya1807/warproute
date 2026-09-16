@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Buffer-size sweep for ./build/counters. Edits only BUF_BYTES in
+# Buffer-size sweep, run through ./scripts/run_counters.sh (which retries
+# ./build/counters on PMU self-test failure). Edits only BUF_BYTES in
 # src/counters_main.cpp, rebuilds, runs, and restores BUF_BYTES = 32 * 1024
 # on exit (normal, build failure, or interrupt).
 #
@@ -42,6 +43,34 @@ set_buf_bytes() {
   fi
 }
 
+BIN=build/counters
+
+# Force a rebuild of $SRC and build. GNU make 3.81 (macOS default, used by the
+# Unix Makefiles generator) compares mtimes in whole seconds, and "newer" means
+# strictly newer. If the BUF_BYTES edit lands in the same second the previous
+# object was built, make considers the target up to date and the old binary
+# survives. Sleeping 1s before the touch puts the source mtime in a later
+# second than any existing object, so the touch alone is not enough without it.
+rebuild() {
+  sleep 1
+  touch "$SRC" || return 1
+  cmake --build build
+}
+
+# Refuse a binary that is not strictly newer than the edited source. Compares
+# nanosecond mtimes (stat -f %Fm) rather than bash's -nt, which in /bin/bash
+# 3.2 (what sudo's secure_path resolves) only has 1-second resolution.
+binary_is_fresh() {
+  local bin_m src_m
+  [ -x "$BIN" ] || { echo "$BIN missing or not executable" >&2; return 1; }
+  bin_m="$(stat -f %Fm "$BIN")" || return 1
+  src_m="$(stat -f %Fm "$SRC")" || return 1
+  if ! awk -v b="$bin_m" -v s="$src_m" 'BEGIN { exit !(b > s) }'; then
+    echo "$BIN mtime $bin_m is not newer than $SRC mtime $src_m" >&2
+    return 1
+  fi
+}
+
 restored=0
 restore() {
   [ $restored -eq 1 ] && return
@@ -51,22 +80,37 @@ restore() {
     echo "WARNING: failed to restore BUF_BYTES in $SRC; fix manually" >&2
     return
   fi
-  if ! cmake --build build; then
+  if ! rebuild; then
     echo "WARNING: rebuild after restore failed" >&2
+  elif ! binary_is_fresh; then
+    echo "WARNING: $BIN is stale after restore; it does not reflect BUF_BYTES = ${DEFAULT}. Rebuild manually." >&2
   fi
 }
 trap restore EXIT
 trap 'exit 130' INT TERM
 
+stale_sizes=()
 for size in "${SIZES[@]}"; do
   set_buf_bytes "$size" || exit 1
-  if ! cmake --build build; then
+  if ! rebuild; then
     echo "ABORT: build failed for BUF_BYTES = ${size}" >&2
     exit 1
   fi
   echo "=== BUF_BYTES = ${size} ==="
-  ./build/counters
+  if ! binary_is_fresh; then
+    echo "FAIL: stale binary for BUF_BYTES = ${size}: build did not relink $BIN after the source edit. No measurement taken for this size."
+    stale_sizes+=("$size")
+    echo
+    continue
+  fi
+  ./scripts/run_counters.sh
   rc=$?
-  [ $rc -eq 0 ] || echo "NOTE: ./build/counters exited with status $rc for BUF_BYTES = ${size}"
+  [ $rc -eq 0 ] || echo "NOTE: ./scripts/run_counters.sh exited with status $rc for BUF_BYTES = ${size}"
   echo
 done
+
+if [ ${#stale_sizes[@]} -gt 0 ]; then
+  echo "FAIL: sizes skipped due to stale binary:"
+  printf '  %s\n' "${stale_sizes[@]}"
+  exit 1
+fi
