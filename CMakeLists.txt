@@ -53,6 +53,17 @@ target_include_directories(counters PRIVATE include)
 target_compile_options(counters PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 target_link_libraries(counters PRIVATE ${CMAKE_DL_LIBS})
 
+# Day 9: naive vs padded blocked SGEMM under counters. Also root-only.
+# timer.cpp and Accelerate are needed only because sgemm_cpu.cpp uses them.
+add_executable(sgemm_counters
+  src/sgemm_counters_main.cpp
+  src/counters.cpp
+  src/timer.cpp
+  kernels/sgemm_cpu.cpp)
+target_include_directories(sgemm_counters PRIVATE include)
+target_compile_options(sgemm_counters PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
+target_link_libraries(sgemm_counters PRIVATE ${CMAKE_DL_LIBS} "-framework Accelerate")
+
 if(CUDAToolkit_FOUND)
   target_compile_definitions(warproute PRIVATE WARPROUTE_HAVE_CUDA)
   target_link_libraries(warproute PRIVATE CUDA::cudart)
