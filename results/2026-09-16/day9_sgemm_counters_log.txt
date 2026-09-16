@@ -1,0 +1,69 @@
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+counters self-test: ok (4096 pages touched)
+n=1024 ld=1040 tile=32 seed=12345
+checksum naive   : -25486.462534
+checksum padded  : -25486.462534
+max abs error    : 0 (tol 0.001) PASS
+kernel,n,tile,ld,seed,verified,max_abs_err,cycles,instructions,l1d_cache_miss_ld_nonspec,l1d_tlb_miss_nonspec,l2_tlb_miss_data,l1d_tlb_access
+naive,1024,0,1024,12345,1,0,3926644952,7543223992,1085255539,570300068,65436,3153101446
+padded_blocked,1024,32,1040,12345,1,0,1405335597,9056893736,21664124,894144,1838,3272368931
+wrote results/2026-09-16/day9_sgemm_counters.csv
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+FAIL counters_self_test: an event counted exactly 0 over 4096 distinct pages; counters are not live
+FAIL   FIXED_CYCLES               delta=14791129
+FAIL   FIXED_INSTRUCTIONS         delta=24777322
+FAIL   L1D_CACHE_MISS_LD_NONSPEC  delta=0  <-- zero
+FAIL   L1D_TLB_MISS_NONSPEC       delta=0  <-- zero
+FAIL   L2_TLB_MISS_DATA           delta=0  <-- zero
+FAIL   L1D_TLB_ACCESS             delta=0  <-- zero
+ABORT: counter self-test failed, PMU counters are not live. No measurement taken.
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+FAIL counters_self_test: an event counted exactly 0 over 4096 distinct pages; counters are not live
+FAIL   FIXED_CYCLES               delta=13631735
+FAIL   FIXED_INSTRUCTIONS         delta=24647350
+FAIL   L1D_CACHE_MISS_LD_NONSPEC  delta=0  <-- zero
+FAIL   L1D_TLB_MISS_NONSPEC       delta=0  <-- zero
+FAIL   L2_TLB_MISS_DATA           delta=0  <-- zero
+FAIL   L1D_TLB_ACCESS             delta=0  <-- zero
+ABORT: counter self-test failed, PMU counters are not live. No measurement taken.
+attempt 1 failed (exit 5), retrying
+attempt 2 failed (exit 1), retrying
+attempt 3 failed (exit 5), retrying
+attempt 4 failed (exit 1), retrying
+attempt 5 failed (exit 1), retrying
+attempt 6 failed (exit 1), retrying
+attempt 7 failed (exit 1), retrying
+attempt 8 failed (exit 1), retrying
+attempt 9 failed (exit 1), retrying
+attempt 10 failed (exit 5), retrying
+ABORT: 10 consecutive self-test failures.
+event FIXED_CYCLES               number=fixed slot=0
+event FIXED_INSTRUCTIONS         number=fixed slot=1
+event L1D_CACHE_MISS_LD_NONSPEC  number=191   slot=5
+event L1D_TLB_MISS_NONSPEC       number=193   slot=6
+event L2_TLB_MISS_DATA           number=1035  slot=2
+event L1D_TLB_ACCESS             number=1440  slot=3
+counters self-test: ok (4096 pages touched)
+n=1024 ld=1040 tile=32 seed=12345
+checksum naive   : -25486.462534
+checksum padded  : -25486.462534
+max abs error    : 0 (tol 0.001) PASS
+kernel,n,tile,ld,seed,verified,max_abs_err,cycles,instructions,l1d_cache_miss_ld_nonspec,l1d_tlb_miss_nonspec,l2_tlb_miss_data,l1d_tlb_access
+naive,1024,0,1024,12345,1,0,3753081056,7527141437,1087336294,577960666,3119244,3158082453
+padded_blocked,1024,32,1040,12345,1,0,1406371723,9056417913,21617759,876418,1029,3272466708
+FAIL: could not create results/2026-09-16/day9_sgemm_counters.csv (exists already, or directory missing). Rows above were NOT saved.

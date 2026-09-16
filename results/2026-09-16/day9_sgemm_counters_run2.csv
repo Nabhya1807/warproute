@@ -1,0 +1,3 @@
+kernel,n,tile,ld,seed,verified,max_abs_err,cycles,instructions,l1d_cache_miss_ld_nonspec,l1d_tlb_miss_nonspec,l2_tlb_miss_data,l1d_tlb_access
+naive,1024,0,1024,12345,1,0,3753081056,7527141437,1087336294,577960666,3119244,3158082453
+padded_blocked,1024,32,1040,12345,1,0,1406371723,9056417913,21617759,876418,1029,3272466708
