@@ -1,3 +1,30 @@
+===================================================================
+WARNING: THE CONFIGURABLE COUNTER VALUES IN THIS FILE ARE NOT DATA.
+
+This sweep was run before counters_self_test() existed. At the time,
+nothing checked that the PMU had actually been armed before a
+measurement was taken.
+
+The arm fails intermittently, roughly one attempt in three. When it
+fails it fails silently: the configurable counters read exactly 0,
+or hold whatever stale value they had, while the fixed counters
+(cycles, instructions) keep working normally. Nothing in the output
+distinguishes a failed arm from a real measurement.
+
+So every configurable-counter value below is unreliable:
+L1D_CACHE_MISS_LD_NONSPEC, L1D_TLB_MISS_NONSPEC, L2_TLB_MISS_DATA,
+L1D_TLB_ACCESS. A zero or a low count here may mean the event did
+not occur, or may mean the counter was never armed. There is no way
+to tell after the fact, and these numbers should not be quoted,
+plotted, or compared against later runs.
+
+This file is kept as evidence of the failure mode, not as data. For
+usable miss counts see the 2026-09-16 sweeps, which run behind the
+self-test gate and abort rather than report zeros.
+
+The data below is unmodified from the original run.
+===================================================================
+
 [ 27%] Built target warproute
 [ 72%] Built target probe
 [ 77%] Building CXX object CMakeFiles/counters.dir/src/counters_main.cpp.o

@@ -246,7 +246,7 @@ gradually, hence the smooth slope.
 Peak is ~7% of estimated single-core NEON FMA throughput (~32 GFLOP/s). This is
 the motivation for the Day 7 blocking work.
 
-(The n=1024 figure here is 1.484, from `results/sgemm_naive.csv`; the Day 7
+(The n=1024 figure here is 1.484, from `results/2026-09-11/sgemm_naive.csv`; the Day 7
 entries below quote 1.486 as the naive baseline, from a later rerun. Rerun
 variance of 0.1%, not a discrepancy worth chasing.)
 

@@ -3,8 +3,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-CSV_PATH = "results/assoc_m3pro.csv"
-OUT_PATH = "results/assoc_m3pro.png"
+CSV_PATH = "results/2026-08-31/assoc_m3pro.csv"
+OUT_PATH = "results/2026-08-31/assoc_m3pro.png"
 
 SERIES_COLOR = "#2a78d6"
 REF_COLOR = "#898781"

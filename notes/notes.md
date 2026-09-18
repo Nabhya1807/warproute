@@ -386,7 +386,7 @@ gradually — hence the smooth slope.
 Peak is ~7% of estimated single-core NEON FMA throughput (~32 GFLOP/s,
 ESTIMATED). That gap is the motivation for the Day 7 blocking work.
 
-*(Note: the n=1024 figure here is 1.484 from `results/sgemm_naive.csv`; Day 7
+*(Note: the n=1024 figure here is 1.484 from `results/2026-09-11/sgemm_naive.csv`; Day 7
 quotes 1.486 as the naive baseline, from a later rerun. 0.1% rerun variance, not
 a discrepancy worth chasing.)*
 
@@ -1284,19 +1284,27 @@ Each of these cost a wrong number to learn.
 
 | Path | Contents |
 |---|---|
-| `results/sgemm_naive.csv` | Day 6 naive SGEMM GFLOP/s vs n |
-| `results/assoc_m3pro.csv`, `.png` | Day 4 associativity sweep and plot |
+| `results/2026-09-11/sgemm_naive.csv` | Day 6 naive SGEMM GFLOP/s vs n |
+| `results/2026-08-31/assoc_m3pro.csv`, `.png` | Day 4 associativity sweep and plot |
 | `results/2026-09-10/sgemm_tile_sweep.csv` | Day 7 unpadded tile sweep |
 | `results/2026-09-10/sgemm_tile_sweep_padded.csv` | Day 7 padded tile sweep (ld = n+16) |
+| `results/2026-09-10/sgemm_tile_sweep.png` | Day 7 tile sweep plot, n = 1024 |
 | `results/2026-09-10/sgemm_blas.csv` | Day 7b Accelerate ceiling, both thread configs |
 | `results/2026-09-15/counter_validation.txt` | Day 8 PMU validation, DVFS ramp, 4.02 GHz |
 | `results/2026-09-15/latency_cycles.txt` | Day 8 latency in cycles; L1 = 4.0, L2 ≈ 26, DRAM = 338.5 |
-| `results/2026-09-15/miss_sweep_raw.txt` | Day 8 raw miss sweep log |
+| `results/2026-09-15/miss_sweep_raw.txt` | Day 8 raw miss sweep log; predates the counter-arm guard, configurable counters unreliable |
 | `results/2026-09-16/l1_residency.txt` | Day 8 close-out: measured residency, L2 = 25.3 cycles |
-| `results/2026-09-16/miss_sweep_raw.txt`, `_v2.txt` | Day 8 close-out raw logs, incl. PMU arm retries |
+| `results/2026-09-16/latency_hierarchy.png`, `l1_residency.png` | Plots of the above |
+| `results/2026-09-16/miss_sweep_raw.txt` | Day 8 close-out raw log; 256 KB point invalid (stale binary, cmake skipped the rebuild) |
+| `results/2026-09-16/miss_sweep_raw_after_rebuild.txt` | Same sweep rerun after forcing the rebuild; incl. PMU arm retries |
 | `results/2026-09-16/day9_mpki.md` | Day 9 writeup (merged into this file) |
 | `results/2026-09-16/day9_sgemm_counters_run1.csv`, `run2.csv` | Day 9 raw counter deltas |
 | `results/2026-09-16/day9_sgemm_counters_log.txt` | Day 9 full run log, incl. the lost attempts |
+| `results/2026-09-16/day9_mpki_vs_runtime.png` | Day 9 MPKI vs runtime plot |
 | `scripts/run_counters.sh` | Counter runner with self-test gate and up to 10 retries |
 | `scripts/miss_sweep.sh` | Miss-sweep driver |
-| `scripts/plot_assoc.py`, `plot_tlb.py` | Plotting |
+| `scripts/plot_assoc.py` | Day 4 associativity plot |
+| `scripts/plot_latency_hierarchy.py` | Latency vs buffer size, parsed from `l1_residency.txt` |
+| `scripts/plot_l1_residency.py` | Measured vs capacity-predicted L1 residency |
+| `scripts/plot_mpki_vs_runtime.py` | Day 9 MPKI against runtime, both runs |
+| `scripts/plot_tile_sweep.py` | Day 7 tile sweep, padded vs unpadded, n = 1024 |
