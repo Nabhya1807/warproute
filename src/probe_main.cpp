@@ -7,7 +7,7 @@
 #include <cstring>
 #include <iostream>
 
-// Day 2: cache capacity sweep.
+
 static int run_capacity() {
   for(size_t i=4 ; i<=65536; i*=2){
       const size_t buffer_bytes = i * 1024;
@@ -30,7 +30,7 @@ static int run_capacity() {
   
   }
 
-// Day 4: L1d associativity sweep.
+
 static int run_assoc() {
   warproute::SystemInfo info = warproute::query();
   size_t l1_bytes = info.p_cores.l1d_cache_size;
@@ -64,10 +64,10 @@ static int run_assoc() {
   return 0;
 }
 
-// Day 3: single-threaded SAXPY bandwidth sweep.
+
 static int run_saxpy() {
   warproute::ulayout w = warproute::make_saxpy();
-  warproute::slayout cfg;   // defaults: 1 thread
+  warproute::slayout cfg; 
 
   for (size_t n = 1024; n <= (64ull * 1024 * 1024); n *= 2) {
     w.setup(n);
@@ -78,7 +78,7 @@ static int run_saxpy() {
       continue;
     }
 
-    w.setup(n);  // reset before timing
+    w.setup(n);  
     warproute::Stats s = warproute::run_n([&]() {
       w.run(cfg);
     });
@@ -95,7 +95,7 @@ static int run_saxpy() {
   return 0;
 }
 
-// Day 6: SGEMM correctness + naive baseline.
+
 static int run_sgemm_verify() {
   return warproute::sgemm_verify() ? 0 : 1;
 }

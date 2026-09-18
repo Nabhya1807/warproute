@@ -9,8 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# arm64 (Apple M3) tuning flag; fall back to plain -O3 if unsupported.
-# Never use -march=native: that flag is x86-only.
+
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-mcpu=apple-m3" WARPROUTE_HAS_MCPU_APPLE_M3)
 
@@ -19,7 +18,7 @@ if(WARPROUTE_HAS_MCPU_APPLE_M3)
   list(APPEND WARPROUTE_RELEASE_FLAGS -mcpu=apple-m3)
 endif()
 
-# GPU support is optional and off on machines without CUDA.
+
 find_package(CUDAToolkit QUIET)
 
 add_executable(warproute
@@ -40,12 +39,10 @@ add_executable(probe
   src/probe_tlb.cpp)
 target_include_directories(probe PRIVATE include)
 target_compile_options(probe PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
-# Apple Accelerate supplies the cblas_sgemm reference ceiling (day 7).
+
 target_link_libraries(probe PRIVATE "-framework Accelerate")
 
-# PMU counters via Apple's private kperf frameworks (dlopen'd at runtime, so no
-# link-time framework dependency). Separate from probe/warproute because it
-# needs root to run: sudo ./build/counters
+
 add_executable(counters
   src/counters_main.cpp
   src/counters.cpp)
@@ -53,8 +50,7 @@ target_include_directories(counters PRIVATE include)
 target_compile_options(counters PRIVATE $<$<CONFIG:Release>:${WARPROUTE_RELEASE_FLAGS}>)
 target_link_libraries(counters PRIVATE ${CMAKE_DL_LIBS})
 
-# Day 9: naive vs padded blocked SGEMM under counters. Also root-only.
-# timer.cpp and Accelerate are needed only because sgemm_cpu.cpp uses them.
+
 add_executable(sgemm_counters
   src/sgemm_counters_main.cpp
   src/counters.cpp

@@ -62,7 +62,7 @@ CoreClusterInfo read_perflevel(const char* prefix) {
   return cluster;
 }
 
-}  // namespace
+}  
 #elif defined(__linux__)
 namespace {
 
@@ -108,7 +108,7 @@ GpuInfo query_gpu() {
   return gpu;
 }
 
-}  // namespace
+}  
 #endif
 
 SystemInfo query() {
@@ -122,16 +122,12 @@ SystemInfo query() {
     info.cache_line_size = cache_line;
   }
 
-  // Page size drives the TLB probe's stride, so it is read rather than
-  // hardcoded. Apple Silicon reports 16384; Intel Macs report 4096.
   std::uint64_t page_sz = 0;
   if (sysctl_u64("hw.pagesize", page_sz)) {
     info.page_size = page_sz;
   }
 
-  // Apple Silicon: perflevel0 is the P-core cluster, perflevel1 is E-core.
-  // On single-cluster Macs (e.g. Intel) perflevel1 simply won't resolve and
-  // e_cores is left at its default (physical_cores == 0).
+  
   info.p_cores = read_perflevel("hw.perflevel0");
   info.e_cores = read_perflevel("hw.perflevel1");
 #elif defined(__linux__)
@@ -165,11 +161,10 @@ SystemInfo query() {
     info.cache_line_size = static_cast<std::size_t>(line_size);
   }
 #endif
-  // Linux doesn't expose a portable P-core/E-core split, so e_cores stays
-  // default (not reported) here.
+ 
 #endif
 
-  // Last resort if neither platform path resolved it.
+
   if (info.page_size == 0) {
     info.page_size = 4096;
   }
@@ -210,4 +205,4 @@ std::string format(const SystemInfo& info) {
   return out.str();
 }
 
-}  // namespace warproute
+}  

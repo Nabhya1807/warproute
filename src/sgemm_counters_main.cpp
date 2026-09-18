@@ -1,17 +1,3 @@
-// Day 9: naive vs padded blocked SGEMM under PMU counters, n=1024.
-//
-// Same matrices, same seed, same warmup policy for both kernels. Setup,
-// verification, checksums and CSV writing all sit outside the bracketed
-// kernel calls. Kernels come unmodified from kernels/sgemm_cpu.cpp.
-//
-// Run from the repo root, through the retry wrapper:
-//   sudo ./scripts/run_counters.sh ./build/sgemm_counters
-//
-// CSV: results/2026-09-16/day9_sgemm_counters.csv. Written only if both
-// kernels verify and counters are still forced at the end. Refuses to
-// overwrite an existing file, so raw results are never clobbered.
-// tile = 0 and ld = n mark the unblocked, unpadded naive kernel.
-
 #include "counters.hpp"
 #include "sgemm_cpu.hpp"
 #include "timer.hpp"
@@ -25,10 +11,10 @@
 #include <vector>
 
 static constexpr std::size_t N    = 1024;
-static constexpr std::size_t LD   = N + 16;   // Day 7 padded row stride
-static constexpr std::size_t TILE = 32;       // Day 7 padded optimum (2.69x)
-static constexpr std::uint32_t SEED = 12345;  // project-wide SGEMM seed
-static constexpr float TOL = 1e-3f;           // absolute, as in sgemm_verify_*
+static constexpr std::size_t LD   = N + 16;   
+static constexpr std::size_t TILE = 32;     
+static constexpr std::uint32_t SEED = 12345; 
+static constexpr float TOL = 1e-3f;           
 static const char* CSV_PATH = "results/2026-09-16/day9_sgemm_counters.csv";
 
 static const std::vector<std::string> EVENTS = {
@@ -40,14 +26,13 @@ static const std::vector<std::string> EVENTS = {
     "L1D_TLB_ACCESS",
 };
 
-// Same distribution and draw order as fill_random() in sgemm_cpu.cpp.
+
 static void fill_random(std::vector<float>& m, std::mt19937& rng) {
   std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
   for (auto& x : m) x = dist(rng);
 }
 
-// Copy a packed n x n matrix into an n x ld buffer, padding zeroed.
-// Same as to_padded() in sgemm_cpu.cpp, so both kernels see identical values.
+
 static std::vector<float> to_padded(const std::vector<float>& m) {
   std::vector<float> out(N * LD, 0.0f);
   for (std::size_t i = 0; i < N; i++)
@@ -55,8 +40,8 @@ static std::vector<float> to_padded(const std::vector<float>& m) {
   return out;
 }
 
-// Deltas in EVENTS order. Returns false if the bracketing was not inserted
-// (counters_read() never ran, so events is empty) rather than recording zeros.
+
+
 static bool deltas(const char* name, const warproute::CounterReading& before,
                    const warproute::CounterReading& after,
                    std::vector<std::uint64_t>& out) {
@@ -75,7 +60,7 @@ static bool deltas(const char* name, const warproute::CounterReading& before,
 int main() {
   warproute::set_high_qos();
 
-  // ---- Setup (outside every measured region) --------------------------------
+
   std::mt19937 rng(SEED);
   std::vector<float> A(N * N), B(N * N);
   fill_random(A, rng);
@@ -100,16 +85,15 @@ int main() {
   warproute::CounterReading naive_before, naive_after;
   warproute::CounterReading pad_before, pad_after;
 
-  // ---- Naive -----------------------------------------------------------------
-  // One untimed warmup: DVFS ramp plus first-touch of every page.
+
   warproute::sgemm_naive(A.data(), B.data(), C_naive.data(), N);
 
-  // BEGIN USER COUNTER BRACKETING: naive
+  
   naive_before = warproute::counters_read();
   warproute::sgemm_naive(A.data(), B.data(), C_naive.data(), N);
   naive_after = warproute::counters_read();
 
-  // ---- Padded blocked, T=32 -------------------------------------------------
+ 
   warproute::sgemm_blocked_padded(Ap.data(), Bp.data(), C_pad.data(), N, LD,
                                   TILE);
 
@@ -118,12 +102,11 @@ int main() {
                                   TILE);
   pad_after = warproute::counters_read();
 
-  // Checked before shutdown, which clears the force flag itself.
+ 
   const bool still_forced = warproute::counters_still_forced();
   warproute::counters_shutdown();
 
-  // ---- Verification and checksums (outside measured regions) ----------------
-  // Reading both outputs here is also what keeps the kernels' work observable.
+
   float max_err = 0.0f;
   double sum_naive = 0.0, sum_pad = 0.0;
   for (std::size_t i = 0; i < N; i++) {
@@ -162,7 +145,7 @@ int main() {
   if (!deltas("naive", naive_before, naive_after, d_naive)) return 3;
   if (!deltas("padded_t32", pad_before, pad_after, d_pad)) return 3;
 
-  // ---- CSV (raw counter deltas only; nothing derived) ------------------------
+ 
   const char* header =
       "kernel,n,tile,ld,seed,verified,max_abs_err,cycles,instructions,"
       "l1d_cache_miss_ld_nonspec,l1d_tlb_miss_nonspec,l2_tlb_miss_data,"
@@ -185,7 +168,7 @@ int main() {
 
   std::printf("%s%s", header, rows);
 
-  // "x": fail rather than overwrite an existing results file.
+
   std::FILE* f = std::fopen(CSV_PATH, "wx");
   if (!f) {
     std::printf("FAIL: could not create %s (exists already, or directory "

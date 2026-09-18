@@ -14,11 +14,6 @@
 
 namespace warproute {
 
-// YOU WRITE THIS.
-// Triple loop. Matrices are flat: element (i,j) is at [i*n + j].
-//   for each row i of C:
-//     for each col j of C:
-//       sum over k of A[i][k] * B[k][j]
 void sgemm_naive(const float* A, const float* B, float* C, std::size_t n) {
     for(size_t i=0; i<n;i++){
         for(size_t j=0;j<n;j++){
@@ -32,7 +27,7 @@ void sgemm_naive(const float* A, const float* B, float* C, std::size_t n) {
     }
 }
 
-// YOU WRITE THIS (after naive works and is verified).
+
 void sgemm_blocked(const float* A, const float* B, float* C,
                    std::size_t n, std::size_t tile) {
       
@@ -59,10 +54,7 @@ void sgemm_blocked(const float* A, const float* B, float* C,
       }
 }
 
-// Day 7 task 2: same blocking, but rows are spaced `ld` floats apart instead of
-// `n`, so the row stride is no longer a power of two. Loop structure, tile
-// shape and flop count are identical to sgemm_blocked -- only the spacing
-// between rows changes.
+
 void sgemm_blocked_padded(const float* A, const float* B, float* C,
                           std::size_t n, std::size_t ld, std::size_t tile) {
 
@@ -97,9 +89,7 @@ static void fill_random(std::vector<float>& m, std::mt19937& rng) {
 bool sgemm_verify() {
   bool ok = true;
 
-  // Check 1: hand-computable 2x2.
-  //   [1 2]   [5 6]   [19 22]
-  //   [3 4] x [7 8] = [43 50]
+  
   {
     const float A[4] = {1, 2, 3, 4};
     const float B[4] = {5, 6, 7, 8};
@@ -114,7 +104,7 @@ bool sgemm_verify() {
     }
   }
 
-  // Check 2: A * I == A, at a size big enough to exercise the loops.
+
   {
     const std::size_t n = 64;
     std::mt19937 rng(12345);
@@ -145,13 +135,13 @@ void sgemm_bench_naive() {
     fill_random(A, rng);
     fill_random(B, rng);
 
-    // Adjust to match your run_n signature and Stats type.
+  
     Stats s = run_n([&]() {
       sgemm_naive(A.data(), B.data(), C.data(), n);
     });
 
     const double flops = 2.0 * (double)n * n * n;
-    const double gflops = flops / s.median_ns;  // ops/ns == Gop/s
+    const double gflops = flops / s.median_ns;  
     std::printf("%zu,%.3f\n", n, gflops);
     std::fflush(stdout);
   }
@@ -211,11 +201,10 @@ void sgemm_sweep_tiles() {
 }
 
 
-// Row stride used by the padded variant: n + 16 floats, so rows are no longer
-// spaced at a power of two.
+
 static std::size_t padded_ld(std::size_t n) { return n + 16; }
 
-// Copy a packed n x n matrix into an n x ld buffer.
+
 static std::vector<float> to_padded(const std::vector<float>& m,
                                     std::size_t n, std::size_t ld) {
   std::vector<float> out(n * ld, 0.0f);
@@ -288,9 +277,7 @@ void sgemm_sweep_tiles_padded() {
 }
 
 
-// Day 7: Apple Accelerate cblas_sgemm as a measured performance ceiling.
-// Row-major, no transpose, alpha=1, beta=0, all leading dimensions n, so this
-// computes exactly the same C = A * B as sgemm_naive.
+
 static void sgemm_blas(const float* A, const float* B, float* C,
                        std::size_t n) {
   const int in = (int)n;
@@ -298,12 +285,7 @@ static void sgemm_blas(const float* A, const float* B, float* C,
               in, in, in, 1.0f, A, in, B, in, 0.0f, C, in);
 }
 
-// Accelerate reads VECLIB_MAXIMUM_THREADS at library init, so a single process
-// can only exercise one configuration. Label whichever one this process is in.
-// The second config is labelled "default" and not "multithreaded" on purpose:
-// at n=512 and n=1024 Accelerate runs sgemm on one thread either way (user CPU
-// time tracks wall time 1:1 in both), so calling it multithreaded would be a
-// false label. It is the uncapped configuration, not a parallel one.
+
 static const char* blas_config() {
   const char* v = std::getenv("VECLIB_MAXIMUM_THREADS");
   return (v && std::string(v) == "1") ? "single_threaded" : "default";
@@ -354,4 +336,4 @@ void sgemm_bench_blas() {
   }
 }
 
-}  // namespace warproute
+}  
