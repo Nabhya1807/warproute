@@ -254,7 +254,7 @@ variance of 0.1%, not a discrepancy worth chasing.)
 
 ## Optimal SGEMM tile is T=8-16, not the predicted T=64-104   [RESOLVED]
 
-Day-2 prediction, written before any SGEMM existed and committed in machine.md:
+Day-2 prediction, written before any SGEMM existed and committed in notes.md:
 three float tiles of T x T must live in L1d at once, so `3 * T^2 * 4 <= 131072`
 gives T <= 104, and the nearest useful power of two is **64x64**. The whole
 argument is capacity — how much fits.

@@ -2,7 +2,7 @@
 
 Sources: `day9_sgemm_counters_run1.csv`, `day9_sgemm_counters_run2.csv`,
 `day9_sgemm_counters_log.txt` (all in this directory), and
-`notes/day9_prediction.md`, written before any Day 9 measurement.
+`notes/notes.md` section 9.1, written before any Day 9 measurement.
 
 ## 1. Method
 
@@ -140,7 +140,7 @@ problem with the counter itself. **No conclusion should be drawn from either
 value of this counter, for either kernel.** It appears in this document only
 as a raw measurement.
 
-## 5. Comparison against `notes/day9_prediction.md`
+## 5. Comparison against `notes/notes.md` section 9.1
 
 ### Q1. Naive SGEMM MPKI — prediction ~150
 
