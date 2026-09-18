@@ -83,7 +83,6 @@ int (*kpep_config_kpc)(kpep_config* cfg, std::uint64_t* buf, std::size_t size);
 // From dyld_info -disassemble of kperfdata and objdump of
 // kernel.release.t6030, Darwin 24.6.0.
 constexpr std::uint64_t KPC_CFG_KERNEL_SET_BITS = 0x20000;
-constexpr std::uint64_t KPC_CFG_KERNEL_SET_BITS = 0x20000;
 
 bool g_loaded = false;
 bool g_active = false;
