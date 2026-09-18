@@ -1,6 +1,3 @@
-// Hour 3: L1 hit latency, measured in cycles directly.
-// No wall clock, no frequency assumption.
-
 #include "counters.hpp"
 #include <cstdio>
 #include <cstdint>
@@ -37,8 +34,6 @@ static std::vector<size_t> build_chain(size_t n, uint32_t seed) {
 int main() {
     std::vector<size_t> chain = build_chain(N_ELEMS, 12345);
 
-    // Two fixed counters first, then the configurable events. Names only;
-    // kpep resolves numbers and slots.
     static constexpr size_t FIRST_PMU_EVENT = 2;
     const std::vector<std::string> events = {
         "FIXED_CYCLES",
@@ -61,7 +56,6 @@ int main() {
     }
 
     // Warm: DVFS ramp plus bring the chain into L1.
-    // Two discarded runs minimum, per the Day 8 frequency finding.
     size_t warm = 0;
     for (int r = 0; r < 3; r++) {
         size_t p = 0;
@@ -71,7 +65,7 @@ int main() {
         }
         warm += p;
     }
-        // ---------------- YOUR CODE ----------------
+      
     warproute::CounterReading before = warproute::counters_read();
 
     size_t p = 0;
@@ -100,9 +94,6 @@ int main() {
     std::printf("cycles/hop       : %.3f\n", cyc_per_hop);
     std::printf("insns/hop        : %.3f\n", ins_per_hop);
     std::printf("checksum p       : %zu\n", p);
-
-    // Counters can be lost mid-run. Checked before shutdown, which clears
-    // the force flag itself.
     const bool still_forced = warproute::counters_still_forced();
     if (!still_forced) {
         const char* msg =

@@ -35,4 +35,4 @@ SystemInfo query();
 
 std::string format(const SystemInfo& info);
 
-}  // namespace warproute
+}  
